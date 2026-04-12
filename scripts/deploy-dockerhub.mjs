@@ -109,17 +109,17 @@ async function main() {
   const apiKey = requireArg(args, 'api-key');
   let image = args.image ? String(args.image) : '';
   const query = args.query ? String(args.query) : '';
-  const autoPick = args['auto-pick'] ? true : false;
+  const autoPick = Boolean(query);
   const explicitServer = args.server ? String(args.server) : undefined;
   if (!image && query) {
     const results = await searchDockerHub(apiUrl, query, { page: 1, limit: 25 });
     if (!results.length) throw new Error(`No Docker Hub results found for query: ${query}`);
-    const picked = autoPick ? pickBestDockerHubImage(results) : results[0];
+    const picked = pickBestDockerHubImage(results);
     if (!picked?.name) throw new Error('Failed to pick Docker Hub image from search results');
     image = String(picked.name);
   }
   if (!image) {
-    throw new Error('Missing image. Use --image <repo[:tag]> or --query <term> [--auto-pick].');
+    throw new Error('Missing image. Use --image <repo[:tag]> or --query <term>.');
   }
 
   const appName = args.name ? String(args.name) : inferAppNameFromImage(image);

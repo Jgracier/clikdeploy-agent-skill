@@ -57,8 +57,8 @@ node scripts/hermes-chat-flow.mjs --mode email-login --api-url https://clikdeplo
 node scripts/hermes-chat-flow.mjs --mode oauth-link --provider google --api-url https://clikdeploy.com
 node scripts/hermes-chat-flow.mjs --mode oauth-complete --api-url https://clikdeploy.com --api-key <cd_live_key>
 
-# Deploy via Docker Hub selection
-node scripts/deploy-dockerhub.mjs --api-url https://clikdeploy.com --api-key <cd_live_key> --query n8n --auto-pick --wait --callback-url https://hermes.local/callback --request-id req_456
+# Deploy via deterministic Docker Hub selection
+node scripts/deploy-dockerhub.mjs --api-url https://clikdeploy.com --api-key <cd_live_key> --query n8n --wait --callback-url https://hermes.local/callback --request-id req_456
 ```
 
 ## Install For Hermes Users

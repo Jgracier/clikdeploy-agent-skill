@@ -95,7 +95,7 @@ node scripts/hermes-chat-flow.mjs --mode oauth-complete --api-url <api_url> --ap
 ## 4) Deploy app (deterministic)
 
 ```bash
-node scripts/deploy-dockerhub.mjs --api-url <api_url> --api-key <api_key> --query <app_query> --auto-pick --wait [--callback-url <url>] [--request-id <id>]
+node scripts/deploy-dockerhub.mjs --api-url <api_url> --api-key <api_key> --query <app_query> --wait [--callback-url <url>] [--request-id <id>]
 ```
 
 or direct image:
