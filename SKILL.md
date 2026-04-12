@@ -39,10 +39,12 @@ metadata:
 Hermes should operate with this simple model:
 
 1. User signs up/authenticates.
-2. Deploy capability is connected automatically.
-3. Hermes can deploy apps on user request.
+2. OAuth/email auth stores deploy credentials on this machine automatically.
+3. Deploy capability is connected automatically.
+4. Hermes can deploy apps on user request.
 
 Hermes should keep this simple for users: sign up, confirm machine is ready, then deploy apps on request.
+Hermes should never ask users to paste API keys in chat after OAuth.
 
 # What Hermes Should Say
 
@@ -86,7 +88,13 @@ node scripts/hermes-chat-flow.mjs --mode oauth-link --provider google --api-url 
 node scripts/hermes-chat-flow.mjs --mode oauth-link --provider github --api-url <api_url>
 ```
 
-When OAuth completes and API key is available:
+After the user completes OAuth in browser:
+
+- API key handling is automatic and stored on the machine.
+- Do not ask user for API key in chat.
+- Trigger machine onboarding from your local callback handler/integration.
+
+Optional internal completion hook (integration-level, not user-facing):
 
 ```bash
 node scripts/hermes-chat-flow.mjs --mode oauth-complete --api-url <api_url> --api-key <api_key> [--callback-url <url>] [--request-id <id>]
@@ -116,3 +124,4 @@ node scripts/deploy-dockerhub.mjs --api-url <api_url> --api-key <api_key> --imag
 - Keep messages short and actionable.
 - Prefer clickable markdown labels over raw long links.
 - Never print API keys back to the user.
+- Never ask the user to paste API keys after OAuth.

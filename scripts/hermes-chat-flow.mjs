@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import {
+  getCliOauthConsentUrl,
   normalizeApiUrl,
   parseArgs,
   requireArg,
@@ -8,12 +9,15 @@ import {
 } from '../lib/clikdeploy-client.mjs';
 import { performAutoOnboard } from '../lib/onboard.mjs';
 
-function getProviderLink(apiUrl, provider) {
-  const p = String(provider || '').toLowerCase();
-  if (p !== 'google' && p !== 'github') {
-    throw new Error('Provider must be google or github');
-  }
-  return `${normalizeApiUrl(apiUrl)}/api/auth/signin/${p}`;
+function oauthInitOptions(args) {
+  return {
+    callbackUrl: args['callback-url'] ? String(args['callback-url']) : undefined,
+    port: args.port ? String(args.port) : undefined,
+  };
+}
+
+async function getProviderLink(apiUrl, provider, args) {
+  return getCliOauthConsentUrl(apiUrl, provider, oauthInitOptions(args));
 }
 
 async function publicJsonRequest(apiUrl, path, body) {
@@ -34,14 +38,12 @@ async function publicJsonRequest(apiUrl, path, body) {
   return payload;
 }
 
-function formatStartMessage(apiUrl) {
-  const base = normalizeApiUrl(apiUrl);
-  const google = `${base}/api/auth/signin/google`;
-  const github = `${base}/api/auth/signin/github`;
+function formatStartMessage(googleUrl, githubUrl) {
   return [
     'Sign up to deploy apps to this machine:',
-    `- [Sign up with Google](${google})`,
-    `- [Sign up with GitHub](${github})`,
+    `- [Sign up with Google](${googleUrl})`,
+    `- [Sign up with GitHub](${githubUrl})`,
+    '- OAuth stores deploy credentials on this machine automatically (no key paste in chat).',
     '- Or reply with email signup/login and provide email + password.',
   ].join('\n');
 }
@@ -124,17 +126,26 @@ async function main() {
   const apiUrl = normalizeApiUrl(String(args['api-url'] || 'https://clikdeploy.com'));
 
   if (mode === 'start') {
+    const [googleUrl, githubUrl] = await Promise.all([
+      getCliOauthConsentUrl(apiUrl, 'google', oauthInitOptions(args)),
+      getCliOauthConsentUrl(apiUrl, 'github', oauthInitOptions(args)),
+    ]);
+
     process.stdout.write(
       `${JSON.stringify(
         {
           success: true,
           flow: 'start',
-          messageMarkdown: formatStartMessage(apiUrl),
+          messageMarkdown: formatStartMessage(googleUrl, githubUrl),
           options: [
             { id: 'email_password', label: 'Email + Password' },
-            { id: 'google_oauth', label: 'Sign up with Google', url: `${apiUrl}/api/auth/signin/google` },
-            { id: 'github_oauth', label: 'Sign up with GitHub', url: `${apiUrl}/api/auth/signin/github` },
+            { id: 'google_oauth', label: 'Sign up with Google', url: googleUrl },
+            { id: 'github_oauth', label: 'Sign up with GitHub', url: githubUrl },
           ],
+          oauthBehavior: {
+            machineStoredApiKey: true,
+            userPasteRequired: false,
+          },
         },
         null,
         2
@@ -145,7 +156,7 @@ async function main() {
 
   if (mode === 'oauth-link') {
     const provider = requireArg(args, 'provider');
-    const url = getProviderLink(apiUrl, provider);
+    const url = await getProviderLink(apiUrl, provider, args);
     const label = String(provider).toLowerCase() === 'google' ? 'Sign up with Google' : 'Sign up with GitHub';
     process.stdout.write(
       `${JSON.stringify(
@@ -155,6 +166,10 @@ async function main() {
           provider,
           url,
           messageMarkdown: `[${label}](${url})`,
+          oauthBehavior: {
+            machineStoredApiKey: true,
+            userPasteRequired: false,
+          },
         },
         null,
         2
