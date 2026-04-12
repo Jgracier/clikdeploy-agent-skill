@@ -1,20 +1,18 @@
 #!/usr/bin/env node
 
 import {
-  getCliOauthConsentUrl,
   normalizeApiUrl,
   parseArgs,
+  startDeviceOAuth,
 } from '../lib/clikdeploy-client.mjs';
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const apiUrl = normalizeApiUrl(String(args['api-url'] || 'https://clikdeploy.com'));
-  const callbackUrl = args['callback-url'] ? String(args['callback-url']) : undefined;
-  const port = args.port ? String(args.port) : undefined;
 
   const [googleConsentUrl, githubConsentUrl] = await Promise.all([
-    getCliOauthConsentUrl(apiUrl, 'google', { port, callbackUrl }),
-    getCliOauthConsentUrl(apiUrl, 'github', { port, callbackUrl }),
+    startDeviceOAuth(apiUrl, 'google').then((result) => result.authUrl),
+    startDeviceOAuth(apiUrl, 'github').then((result) => result.authUrl),
   ]);
 
   const output = {
@@ -24,6 +22,7 @@ async function main() {
       `- [Sign up with Google](${googleConsentUrl})`,
       `- [Sign up with GitHub](${githubConsentUrl})`,
       '- Or use email/password signup/login in chat.',
+      '- After OAuth, copy the one-time code shown and paste it in chat.',
     ].join('\n'),
     options: [
       {
@@ -49,10 +48,11 @@ async function main() {
       },
     ],
     nextStep:
-      'After sign-up finishes, machine setup and deploy key handling are automatic; this machine is then ready for app deployments.',
+      'After OAuth, user pastes the one-time code in chat. Machine setup and key handling then complete automatically.',
     oauthBehavior: {
       machineStoredApiKey: true,
-      userPasteRequired: false,
+      userPasteRequired: true,
+      pasteType: 'one_time_code',
     },
   };
 

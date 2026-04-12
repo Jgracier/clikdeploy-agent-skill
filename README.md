@@ -3,7 +3,7 @@
 A Hermes skill that keeps user experience simple:
 
 1. User signs up/authenticates.
-2. OAuth/email auth stores deploy credentials on the machine automatically.
+2. For OAuth, user completes consent and pastes a one-time code in chat.
 3. Machine is connected automatically for deployments.
 4. Hermes deploys open-source apps and returns the URL.
 
@@ -25,7 +25,7 @@ A Hermes skill that keeps user experience simple:
 Messaging is friendly and short:
 
 - "Sign up to deploy apps to this machine"
-- No API key copy/paste step after OAuth
+- One-time code paste step after OAuth (never API key paste)
 
 ## Auto Connect
 
@@ -58,8 +58,10 @@ node scripts/hermes-chat-flow.mjs --mode email-login --api-url https://clikdeplo
 # OAuth link (user-facing)
 node scripts/hermes-chat-flow.mjs --mode oauth-link --provider google --api-url https://clikdeploy.com
 
-# OAuth completion is machine-handled (no user API key step in chat)
-# Optional integration hook only:
+# OAuth completion (preferred: one-time code from callback page)
+node scripts/hermes-chat-flow.mjs --mode oauth-complete --api-url https://clikdeploy.com --one-time-code <CODE>
+
+# Optional integration fallback:
 node scripts/hermes-chat-flow.mjs --mode oauth-complete --api-url https://clikdeploy.com --api-key <machine_stored_key>
 
 # Deploy via deterministic Docker Hub selection

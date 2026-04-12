@@ -1,23 +1,18 @@
 #!/usr/bin/env node
 
 import {
-  getCliOauthConsentUrl,
+  exchangeDeviceOAuthCode,
   normalizeApiUrl,
   parseArgs,
   requireArg,
   safeJsonParse,
+  startDeviceOAuth,
 } from '../lib/clikdeploy-client.mjs';
 import { performAutoOnboard } from '../lib/onboard.mjs';
 
-function oauthInitOptions(args) {
-  return {
-    callbackUrl: args['callback-url'] ? String(args['callback-url']) : undefined,
-    port: args.port ? String(args.port) : undefined,
-  };
-}
-
-async function getProviderLink(apiUrl, provider, args) {
-  return getCliOauthConsentUrl(apiUrl, provider, oauthInitOptions(args));
+async function getProviderLink(apiUrl, provider) {
+  const init = await startDeviceOAuth(apiUrl, provider);
+  return init.authUrl;
 }
 
 async function publicJsonRequest(apiUrl, path, body) {
@@ -43,7 +38,7 @@ function formatStartMessage(googleUrl, githubUrl) {
     'Sign up to deploy apps to this machine:',
     `- [Sign up with Google](${googleUrl})`,
     `- [Sign up with GitHub](${githubUrl})`,
-    '- OAuth stores deploy credentials on this machine automatically (no key paste in chat).',
+    '- After OAuth, copy the one-time code and paste it in chat.',
     '- Or reply with email signup/login and provide email + password.',
   ].join('\n');
 }
@@ -94,7 +89,16 @@ async function runEmailAuthAndOnboard(mode, args, apiUrl) {
 }
 
 async function runOauthComplete(args, apiUrl) {
-  const apiKey = requireArg(args, 'api-key');
+  let apiKey = args['api-key'] ? String(args['api-key']) : '';
+  const oneTimeCode = args['one-time-code'] ? String(args['one-time-code']) : args.code ? String(args.code) : '';
+  if (!apiKey) {
+    if (!oneTimeCode) {
+      throw new Error('Provide --one-time-code (preferred) or --api-key');
+    }
+    const exchanged = await exchangeDeviceOAuthCode(apiUrl, oneTimeCode);
+    apiKey = exchanged.apiKey;
+  }
+
   const onboard = await performAutoOnboard({
     apiUrl,
     apiKey,
@@ -116,6 +120,10 @@ async function runOauthComplete(args, apiUrl) {
     success: true,
     flow: 'oauth-complete',
     messageMarkdown,
+    oauth: {
+      machineStoredApiKey: true,
+      oneTimeCodeUsed: Boolean(oneTimeCode),
+    },
     onboard,
   };
 }
@@ -127,8 +135,8 @@ async function main() {
 
   if (mode === 'start') {
     const [googleUrl, githubUrl] = await Promise.all([
-      getCliOauthConsentUrl(apiUrl, 'google', oauthInitOptions(args)),
-      getCliOauthConsentUrl(apiUrl, 'github', oauthInitOptions(args)),
+      startDeviceOAuth(apiUrl, 'google').then((result) => result.authUrl),
+      startDeviceOAuth(apiUrl, 'github').then((result) => result.authUrl),
     ]);
 
     process.stdout.write(
@@ -144,7 +152,8 @@ async function main() {
           ],
           oauthBehavior: {
             machineStoredApiKey: true,
-            userPasteRequired: false,
+            userPasteRequired: true,
+            pasteType: 'one_time_code',
           },
         },
         null,
@@ -156,7 +165,7 @@ async function main() {
 
   if (mode === 'oauth-link') {
     const provider = requireArg(args, 'provider');
-    const url = await getProviderLink(apiUrl, provider, args);
+    const url = await getProviderLink(apiUrl, provider);
     const label = String(provider).toLowerCase() === 'google' ? 'Sign up with Google' : 'Sign up with GitHub';
     process.stdout.write(
       `${JSON.stringify(
@@ -165,10 +174,11 @@ async function main() {
           flow: 'oauth-link',
           provider,
           url,
-          messageMarkdown: `[${label}](${url})`,
+          messageMarkdown: `[${label}](${url})\n\nAfter signup in browser, copy the one-time code shown and paste it here.`,
           oauthBehavior: {
             machineStoredApiKey: true,
-            userPasteRequired: false,
+            userPasteRequired: true,
+            pasteType: 'one_time_code',
           },
         },
         null,
