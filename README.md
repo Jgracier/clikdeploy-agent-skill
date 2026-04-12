@@ -21,14 +21,14 @@ A Hermes skill that keeps user experience simple:
 - Sign up with Google
 - Sign up with GitHub
 
-Messaging is intentionally friendly and short:
+Messaging is friendly and short:
 
 - "Sign up to deploy apps to this machine"
 
-## Deterministic Behavior
+## Auto Connect
 
 - Auto-connect after auth completion
-- Deterministic Docker image selection when using query mode:
+- Docker image selection when using query mode:
   - highest pull count
   - then highest stars
   - then trusted/official flags
@@ -57,7 +57,7 @@ node scripts/hermes-chat-flow.mjs --mode email-login --api-url https://clikdeplo
 node scripts/hermes-chat-flow.mjs --mode oauth-link --provider google --api-url https://clikdeploy.com
 node scripts/hermes-chat-flow.mjs --mode oauth-complete --api-url https://clikdeploy.com --api-key <cd_live_key>
 
-# Deploy via deterministic Docker Hub selection
+# Deploy via Docker Hub selection
 node scripts/deploy-dockerhub.mjs --api-url https://clikdeploy.com --api-key <cd_live_key> --query n8n --auto-pick --wait --callback-url https://hermes.local/callback --request-id req_456
 ```
 
