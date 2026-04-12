@@ -4,7 +4,6 @@ import {
   apiRequest,
   buildFallbackUrl,
   getApp,
-  getDeployments,
   getServers,
   inferAppNameFromImage,
   normalizeApiUrl,
@@ -16,7 +15,6 @@ import {
 } from '../lib/clikdeploy-client.mjs';
 import { loadUserApiKey } from '../lib/local-auth-store.mjs';
 
-const POLL_MS = 2000;
 const TIMEOUT_MS = 10 * 60 * 1000;
 
 async function postCallback(callbackUrl, callbackToken, payload) {
@@ -35,10 +33,6 @@ async function postCallback(callbackUrl, callbackToken, payload) {
   } catch {
     // callback failures are non-fatal for deploy execution
   }
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function parseEnvArgs(args) {
@@ -76,29 +70,39 @@ function extractAppAndDeployment(payload) {
   return { app, deployment };
 }
 
-async function waitForDeployment(apiUrl, apiKey, appId, deploymentId) {
-  const startedAt = Date.now();
+async function waitForDeployment(apiUrl, apiKey, deploymentId) {
+  const url =
+    `${normalizeApiUrl(apiUrl)}/api/deployments/${encodeURIComponent(String(deploymentId))}/wait` +
+    `?wait=1&timeoutMs=${encodeURIComponent(String(TIMEOUT_MS))}`;
 
-  while (Date.now() - startedAt < TIMEOUT_MS) {
-    const deployments = await getDeployments(apiUrl, apiKey, appId);
-    const current = deployments.find((item) => String(item.id) === String(deploymentId));
-
-    if (!current) {
-      throw new Error(`Deployment not found: ${deploymentId}`);
-    }
-
-    const status = String(current.status || '').toUpperCase();
-    if (status === 'SUCCESS') {
-      return current;
-    }
-    if (status === 'FAILED') {
-      const reason = current.error || 'Deployment failed';
-      throw new Error(String(reason));
-    }
-
-    await sleep(POLL_MS);
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+  });
+  const text = await response.text();
+  let payload;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    payload = { success: false, raw: text };
+  }
+  if (!response.ok) {
+    const msg = payload?.error || `Deployment wait failed (${response.status})`;
+    throw new Error(String(msg));
   }
 
+  const deployment = payload?.data?.deployment || null;
+  if (!deployment || !deployment.id) {
+    throw new Error('Deployment wait response missing deployment payload');
+  }
+
+  const status = String(deployment.status || '').toUpperCase();
+  if (status === 'SUCCESS') return deployment;
+  if (status === 'FAILED') throw new Error(String(deployment.error || 'Deployment failed'));
+  if (status === 'CANCELLED') throw new Error('Deployment cancelled');
   throw new Error('Deployment timed out');
 }
 
@@ -156,7 +160,7 @@ async function main() {
 
   let deploymentStatus = deployment || null;
   if (wait && deployment?.id) {
-    deploymentStatus = await waitForDeployment(apiUrl, apiKey, app.id, deployment.id);
+    deploymentStatus = await waitForDeployment(apiUrl, apiKey, deployment.id);
   }
 
   const latestApp = await getApp(apiUrl, apiKey, app.id);
