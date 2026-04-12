@@ -1,0 +1,40 @@
+{
+  "events": [
+    {
+      "event": "self_host_ready",
+      "success": true,
+      "requestId": "req_123",
+      "machineName": "my-macbook (Home)",
+      "serverId": "srv_abc",
+      "readyMessage": "You are ready to deploy apps to this machine.",
+      "suggestionMessage": "Here are some apps users find helpful: n8n, Ghost, Vaultwarden, Plausible.",
+      "suggestedApps": [
+        {
+          "id": "n8n",
+          "name": "n8n",
+          "dockerImage": "n8nio/n8n:latest",
+          "popularityScore": 1234
+        }
+      ]
+    },
+    {
+      "event": "app_deployed",
+      "success": true,
+      "requestId": "req_456",
+      "app": {
+        "id": "app_xyz",
+        "name": "n8n",
+        "image": "n8nio/n8n:latest",
+        "status": "RUNNING"
+      },
+      "url": "https://n8n.example.com",
+      "readyMessage": "Deployment complete. App is reachable at https://n8n.example.com"
+    },
+    {
+      "event": "app_deploy_failed",
+      "success": false,
+      "requestId": "req_457",
+      "error": "Deployment failed"
+    }
+  ]
+}
