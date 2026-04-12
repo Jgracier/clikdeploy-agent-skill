@@ -48,11 +48,9 @@ async function main() {
       },
     ],
     nextStep:
-      'After OAuth, user pastes the one-time code in chat. Machine setup and key handling then complete automatically.',
+      'After OAuth, user pastes the one-time code in chat. Setup then completes automatically.',
     oauthBehavior: {
-      machineStoredApiKey: true,
-      userPasteRequired: true,
-      pasteType: 'one_time_code',
+      requiresOneTimeCode: true,
     },
   };
 

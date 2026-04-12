@@ -89,15 +89,12 @@ async function runEmailAuthAndOnboard(mode, args, apiUrl) {
 }
 
 async function runOauthComplete(args, apiUrl) {
-  let apiKey = args['api-key'] ? String(args['api-key']) : '';
   const oneTimeCode = args['one-time-code'] ? String(args['one-time-code']) : args.code ? String(args.code) : '';
-  if (!apiKey) {
-    if (!oneTimeCode) {
-      throw new Error('Provide --one-time-code (preferred) or --api-key');
-    }
-    const exchanged = await exchangeDeviceOAuthCode(apiUrl, oneTimeCode);
-    apiKey = exchanged.apiKey;
+  if (!oneTimeCode) {
+    throw new Error('Missing required argument: --one-time-code');
   }
+  const exchanged = await exchangeDeviceOAuthCode(apiUrl, oneTimeCode);
+  const apiKey = exchanged.apiKey;
 
   const onboard = await performAutoOnboard({
     apiUrl,
@@ -112,7 +109,7 @@ async function runOauthComplete(args, apiUrl) {
   });
 
   const setupLine =
-    'Authentication confirmed. Self-host setup is complete, and this computer is ready to deploy apps.';
+    'Authentication confirmed. This machine is ready to deploy apps.';
   const suggestionLine = onboard?.suggestionMessage || '';
   const messageMarkdown = [setupLine, suggestionLine].filter(Boolean).join('\n\n');
 
@@ -121,7 +118,7 @@ async function runOauthComplete(args, apiUrl) {
     flow: 'oauth-complete',
     messageMarkdown,
     oauth: {
-      machineStoredApiKey: true,
+      requiresOneTimeCode: true,
       oneTimeCodeUsed: Boolean(oneTimeCode),
     },
     onboard,
@@ -151,9 +148,7 @@ async function main() {
             { id: 'github_oauth', label: 'Sign up with GitHub', url: githubUrl },
           ],
           oauthBehavior: {
-            machineStoredApiKey: true,
-            userPasteRequired: true,
-            pasteType: 'one_time_code',
+            requiresOneTimeCode: true,
           },
         },
         null,
@@ -176,9 +171,7 @@ async function main() {
           url,
           messageMarkdown: `[${label}](${url})\n\nAfter signup in browser, copy the one-time code shown and paste it here.`,
           oauthBehavior: {
-            machineStoredApiKey: true,
-            userPasteRequired: true,
-            pasteType: 'one_time_code',
+            requiresOneTimeCode: true,
           },
         },
         null,

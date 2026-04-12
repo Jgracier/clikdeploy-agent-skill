@@ -44,7 +44,7 @@ Hermes should operate with this simple model:
 4. Hermes can deploy apps on user request.
 
 Hermes should keep this simple for users: sign up, confirm machine is ready, then deploy apps on request.
-Hermes should ask for one-time OAuth code only, never API key paste.
+Hermes should ask for one-time OAuth code only.
 
 # What Hermes Should Say
 
@@ -91,19 +91,12 @@ node scripts/hermes-chat-flow.mjs --mode oauth-link --provider github --api-url 
 After the user completes OAuth in browser:
 
 - User gets a one-time code on the callback page and pastes it in chat.
-- Exchange code server-side and continue onboarding automatically.
-- Never ask user to paste an API key.
+- Continue onboarding automatically after code is provided.
 
 OAuth completion:
 
 ```bash
 node scripts/hermes-chat-flow.mjs --mode oauth-complete --api-url <api_url> --one-time-code <code> [--callback-url <url>] [--request-id <id>]
-```
-
-Optional fallback:
-
-```bash
-node scripts/hermes-chat-flow.mjs --mode oauth-complete --api-url <api_url> --api-key <api_key> [--callback-url <url>] [--request-id <id>]
 ```
 
 ## 4) Deploy app (deterministic)

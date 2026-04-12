@@ -25,7 +25,7 @@ A Hermes skill that keeps user experience simple:
 Messaging is friendly and short:
 
 - "Sign up to deploy apps to this machine"
-- One-time code paste step after OAuth (never API key paste)
+- One-time code paste step after OAuth
 
 ## Auto Connect
 
@@ -60,9 +60,6 @@ node scripts/hermes-chat-flow.mjs --mode oauth-link --provider google --api-url 
 
 # OAuth completion (preferred: one-time code from callback page)
 node scripts/hermes-chat-flow.mjs --mode oauth-complete --api-url https://clikdeploy.com --one-time-code <CODE>
-
-# Optional integration fallback:
-node scripts/hermes-chat-flow.mjs --mode oauth-complete --api-url https://clikdeploy.com --api-key <machine_stored_key>
 
 # Deploy via deterministic Docker Hub selection
 node scripts/deploy-dockerhub.mjs --api-url https://clikdeploy.com --api-key <cd_live_key> --query n8n --wait --callback-url https://hermes.local/callback --request-id req_456
