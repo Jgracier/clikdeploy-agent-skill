@@ -72,21 +72,21 @@ After deploy:
 ## 1) Start auth flow (chat-safe options)
 
 ```bash
-node scripts/hermes-chat-flow.mjs --mode start --api-url <api_url>
+node scripts/hermes-chat-flow.mjs --mode start [--api-url <api_url>]
 ```
 
 ## 2) Email path (auto-connect happens in flow)
 
 ```bash
-node scripts/hermes-chat-flow.mjs --mode email-signup --api-url <api_url> --email <email> --password <password> [--name <machine_name>] [--callback-url <url>] [--request-id <id>]
-node scripts/hermes-chat-flow.mjs --mode email-login --api-url <api_url> --email <email> --password <password> [--callback-url <url>] [--request-id <id>]
+node scripts/hermes-chat-flow.mjs --mode email-signup --email <email> --password <password> [--api-url <api_url>] [--name <machine_name>] [--callback-url <url>] [--request-id <id>]
+node scripts/hermes-chat-flow.mjs --mode email-login --email <email> --password <password> [--api-url <api_url>] [--callback-url <url>] [--request-id <id>]
 ```
 
 ## 3) OAuth path
 
 ```bash
-node scripts/hermes-chat-flow.mjs --mode oauth-link --provider google --api-url <api_url>
-node scripts/hermes-chat-flow.mjs --mode oauth-link --provider github --api-url <api_url>
+node scripts/hermes-chat-flow.mjs --mode oauth-link --provider google [--api-url <api_url>]
+node scripts/hermes-chat-flow.mjs --mode oauth-link --provider github [--api-url <api_url>]
 ```
 
 After the user completes OAuth in browser:
@@ -97,25 +97,25 @@ After the user completes OAuth in browser:
 OAuth completion:
 
 ```bash
-node scripts/hermes-chat-flow.mjs --mode oauth-complete --api-url <api_url> --one-time-code <code> [--callback-url <url>] [--request-id <id>]
+node scripts/hermes-chat-flow.mjs --mode oauth-complete --one-time-code <code> [--api-url <api_url>] [--callback-url <url>] [--request-id <id>]
 ```
 
 ## 4) Deploy app (deterministic)
 
 ```bash
-node scripts/deploy-dockerhub.mjs --api-url <api_url> --query <app_query> --wait [--callback-url <url>] [--request-id <id>]
+node scripts/deploy-dockerhub.mjs --query <app_query> --wait [--api-url <api_url>] [--callback-url <url>] [--request-id <id>]
 ```
 
 or direct image:
 
 ```bash
-node scripts/deploy-dockerhub.mjs --api-url <api_url> --image <repo[:tag]> --wait [--callback-url <url>] [--request-id <id>]
+node scripts/deploy-dockerhub.mjs --image <repo[:tag]> --wait [--api-url <api_url>] [--callback-url <url>] [--request-id <id>]
 ```
 
 Optional explicit key override:
 
 ```bash
-node scripts/deploy-dockerhub.mjs --api-url <api_url> --api-key <api_key> --query <app_query> --wait
+node scripts/deploy-dockerhub.mjs --api-key <api_key> --query <app_query> --wait [--api-url <api_url>]
 ```
 
 # Callback Events (If callback URL is provided)

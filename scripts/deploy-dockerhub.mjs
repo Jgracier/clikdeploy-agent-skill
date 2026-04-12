@@ -11,7 +11,6 @@ import {
   parseArgs,
   pickBestDockerHubImage,
   preferHomeAgentServer,
-  requireArg,
   searchDockerHub,
   toEnvObject,
 } from '../lib/clikdeploy-client.mjs';
@@ -106,7 +105,7 @@ async function waitForDeployment(apiUrl, apiKey, appId, deploymentId) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
 
-  const apiUrl = normalizeApiUrl(requireArg(args, 'api-url'));
+  const apiUrl = normalizeApiUrl(String(args['api-url'] || 'https://clikdeploy.com'));
   const apiKey = args['api-key'] ? String(args['api-key']) : loadUserApiKey();
   if (!apiKey) {
     throw new Error('Missing user API key. Run auth flow first or pass --api-key.');

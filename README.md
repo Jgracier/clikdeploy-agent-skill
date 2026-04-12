@@ -51,24 +51,26 @@ See `examples/callback-events.json` for payload shapes.
 
 ```bash
 # Start chat-safe auth options
-node scripts/hermes-chat-flow.mjs --mode start --api-url https://clikdeploy.com
+node scripts/hermes-chat-flow.mjs --mode start
 
 # Email signup/login + auto-connect
-node scripts/hermes-chat-flow.mjs --mode email-signup --api-url https://clikdeploy.com --email you@example.com --password 'secret'
-node scripts/hermes-chat-flow.mjs --mode email-login --api-url https://clikdeploy.com --email you@example.com --password 'secret'
+node scripts/hermes-chat-flow.mjs --mode email-signup --email you@example.com --password 'secret'
+node scripts/hermes-chat-flow.mjs --mode email-login --email you@example.com --password 'secret'
 
 # OAuth link (user-facing)
-node scripts/hermes-chat-flow.mjs --mode oauth-link --provider google --api-url https://clikdeploy.com
+node scripts/hermes-chat-flow.mjs --mode oauth-link --provider google
 
 # OAuth completion (preferred: one-time code from callback page)
-node scripts/hermes-chat-flow.mjs --mode oauth-complete --api-url https://clikdeploy.com --one-time-code <CODE>
+node scripts/hermes-chat-flow.mjs --mode oauth-complete --one-time-code <CODE>
 
 # Deploy via deterministic Docker Hub selection
-node scripts/deploy-dockerhub.mjs --api-url https://clikdeploy.com --query n8n --wait --callback-url https://hermes.local/callback --request-id req_456
+node scripts/deploy-dockerhub.mjs --query n8n --wait --callback-url https://hermes.local/callback --request-id req_456
 
 # Optional explicit key override:
-node scripts/deploy-dockerhub.mjs --api-url https://clikdeploy.com --api-key <cd_live_key> --query n8n --wait
+node scripts/deploy-dockerhub.mjs --api-key <cd_live_key> --query n8n --wait
 ```
+
+`--api-url` remains available when targeting non-default environments.
 
 ## Publish
 

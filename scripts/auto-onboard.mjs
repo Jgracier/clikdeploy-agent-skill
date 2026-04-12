@@ -9,7 +9,7 @@ import { performAutoOnboard } from '../lib/onboard.mjs';
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const apiUrl = normalizeApiUrl(requireArg(args, 'api-url'));
+  const apiUrl = normalizeApiUrl(String(args['api-url'] || 'https://clikdeploy.com'));
   const apiKey = requireArg(args, 'api-key');
 
   const output = await performAutoOnboard({
