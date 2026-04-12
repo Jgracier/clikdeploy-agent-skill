@@ -9,6 +9,7 @@ import {
   startDeviceOAuth,
 } from '../lib/clikdeploy-client.mjs';
 import { performAutoOnboard } from '../lib/onboard.mjs';
+import { saveUserApiKey } from '../lib/local-auth-store.mjs';
 
 async function getProviderLink(apiUrl, provider) {
   const init = await startDeviceOAuth(apiUrl, provider);
@@ -59,6 +60,7 @@ async function runEmailAuthAndOnboard(mode, args, apiUrl) {
   if (!apiKey) {
     throw new Error('Authentication succeeded but no apiKey was returned');
   }
+  saveUserApiKey(apiKey);
 
   const onboard = await performAutoOnboard({
     apiUrl,
@@ -95,6 +97,7 @@ async function runOauthComplete(args, apiUrl) {
   }
   const exchanged = await exchangeDeviceOAuthCode(apiUrl, oneTimeCode);
   const apiKey = exchanged.apiKey;
+  saveUserApiKey(apiKey);
 
   const onboard = await performAutoOnboard({
     apiUrl,

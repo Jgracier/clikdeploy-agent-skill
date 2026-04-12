@@ -45,6 +45,7 @@ Hermes should operate with this simple model:
 
 Hermes should keep this simple for users: sign up, confirm machine is ready, then deploy apps on request.
 Hermes should ask for one-time OAuth code only.
+Auth should persist user deploy credentials locally so deploy commands can run without asking for key input again.
 
 # What Hermes Should Say
 
@@ -102,13 +103,19 @@ node scripts/hermes-chat-flow.mjs --mode oauth-complete --api-url <api_url> --on
 ## 4) Deploy app (deterministic)
 
 ```bash
-node scripts/deploy-dockerhub.mjs --api-url <api_url> --api-key <api_key> --query <app_query> --wait [--callback-url <url>] [--request-id <id>]
+node scripts/deploy-dockerhub.mjs --api-url <api_url> --query <app_query> --wait [--callback-url <url>] [--request-id <id>]
 ```
 
 or direct image:
 
 ```bash
-node scripts/deploy-dockerhub.mjs --api-url <api_url> --api-key <api_key> --image <repo[:tag]> --wait [--callback-url <url>] [--request-id <id>]
+node scripts/deploy-dockerhub.mjs --api-url <api_url> --image <repo[:tag]> --wait [--callback-url <url>] [--request-id <id>]
+```
+
+Optional explicit key override:
+
+```bash
+node scripts/deploy-dockerhub.mjs --api-url <api_url> --api-key <api_key> --query <app_query> --wait
 ```
 
 # Callback Events (If callback URL is provided)

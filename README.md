@@ -7,6 +7,8 @@ A Hermes skill that keeps user experience simple:
 3. Machine is connected automatically for deployments.
 4. Hermes deploys open-source apps and returns the URL.
 
+After auth completes, the user API key is saved locally to `~/.clikdeploy/api-key` for future deploy calls.
+
 ## What This Repo Includes
 
 - `SKILL.md`: Hermes skill contract (minimal agent-facing behavior)
@@ -62,7 +64,10 @@ node scripts/hermes-chat-flow.mjs --mode oauth-link --provider google --api-url 
 node scripts/hermes-chat-flow.mjs --mode oauth-complete --api-url https://clikdeploy.com --one-time-code <CODE>
 
 # Deploy via deterministic Docker Hub selection
-node scripts/deploy-dockerhub.mjs --api-url https://clikdeploy.com --api-key <cd_live_key> --query n8n --wait --callback-url https://hermes.local/callback --request-id req_456
+node scripts/deploy-dockerhub.mjs --api-url https://clikdeploy.com --query n8n --wait --callback-url https://hermes.local/callback --request-id req_456
+
+# Optional explicit key override:
+node scripts/deploy-dockerhub.mjs --api-url https://clikdeploy.com --api-key <cd_live_key> --query n8n --wait
 ```
 
 ## Publish

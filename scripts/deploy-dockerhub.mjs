@@ -15,6 +15,7 @@ import {
   searchDockerHub,
   toEnvObject,
 } from '../lib/clikdeploy-client.mjs';
+import { loadUserApiKey } from '../lib/local-auth-store.mjs';
 
 const POLL_MS = 2000;
 const TIMEOUT_MS = 10 * 60 * 1000;
@@ -106,7 +107,10 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
 
   const apiUrl = normalizeApiUrl(requireArg(args, 'api-url'));
-  const apiKey = requireArg(args, 'api-key');
+  const apiKey = args['api-key'] ? String(args['api-key']) : loadUserApiKey();
+  if (!apiKey) {
+    throw new Error('Missing user API key. Run auth flow first or pass --api-key.');
+  }
   let image = args.image ? String(args.image) : '';
   const query = args.query ? String(args.query) : '';
   const autoPick = Boolean(query);
