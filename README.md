@@ -68,14 +68,6 @@ node scripts/hermes-chat-flow.mjs --mode oauth-complete --api-url https://clikde
 node scripts/deploy-dockerhub.mjs --api-url https://clikdeploy.com --api-key <cd_live_key> --query n8n --wait --callback-url https://hermes.local/callback --request-id req_456
 ```
 
-## Install For Hermes Users
-
-Common pattern:
-
-1. Clone this repo.
-2. Copy `SKILL.md` (and scripts folder if your setup executes local scripts) into your Hermes skills location, or publish via Hermes skills publishing workflow.
-3. Register/use the skill in Hermes.
-
 ## Publish
 
 See `PUBLISHING.md`.
