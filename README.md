@@ -63,6 +63,9 @@ node scripts/hermes-chat-flow.mjs --mode oauth-link --provider google
 # OAuth completion (preferred: one-time code from callback page)
 node scripts/hermes-chat-flow.mjs --mode oauth-complete --one-time-code <CODE>
 
+# Reconnect self-host on this machine (full reconnect flow)
+node scripts/hermes-chat-flow.mjs --mode reconnect
+
 # Deploy via deterministic Docker Hub selection
 node scripts/deploy-dockerhub.mjs --query n8n --callback-url https://hermes.local/callback --request-id req_456
 

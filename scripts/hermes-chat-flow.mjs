@@ -9,7 +9,7 @@ import {
   startDeviceOAuth,
 } from '../lib/clikdeploy-client.mjs';
 import { performAutoOnboard } from '../lib/onboard.mjs';
-import { saveUserApiKey } from '../lib/local-auth-store.mjs';
+import { loadUserApiKey, saveUserApiKey } from '../lib/local-auth-store.mjs';
 
 async function getProviderLink(apiUrl, provider) {
   const init = await startDeviceOAuth(apiUrl, provider);
@@ -128,6 +128,37 @@ async function runOauthComplete(args, apiUrl) {
   };
 }
 
+async function runReconnect(args, apiUrl) {
+  const apiKey = args['api-key'] ? String(args['api-key']) : loadUserApiKey();
+  if (!apiKey) {
+    throw new Error(
+      'Missing user API key. Sign in first with email/password or OAuth completion.'
+    );
+  }
+
+  const onboard = await performAutoOnboard({
+    apiUrl,
+    apiKey,
+    name: args.name ? String(args.name) : undefined,
+    callbackUrl: args['callback-url'] ? String(args['callback-url']) : undefined,
+    callbackToken: args['callback-token'] ? String(args['callback-token']) : undefined,
+    requestId: args['request-id'] ? String(args['request-id']) : undefined,
+    runInstaller: true,
+    waitForReady: true,
+    suggestionLimit: args['suggestion-limit'] ? Number(args['suggestion-limit']) : 6,
+  });
+
+  return {
+    success: true,
+    flow: 'reconnect',
+    messageMarkdown: 'Reconnect complete. This machine is ready to deploy apps.',
+    reconnect: {
+      completed: true,
+    },
+    onboard,
+  };
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const mode = String(args.mode || 'start').toLowerCase();
@@ -196,7 +227,15 @@ async function main() {
     return;
   }
 
-  throw new Error('Unsupported mode. Use start | oauth-link | email-signup | email-login | oauth-complete');
+  if (mode === 'reconnect') {
+    const output = await runReconnect(args, apiUrl);
+    process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+    return;
+  }
+
+  throw new Error(
+    'Unsupported mode. Use start | oauth-link | email-signup | email-login | oauth-complete | reconnect'
+  );
 }
 
 main().catch((error) => {
