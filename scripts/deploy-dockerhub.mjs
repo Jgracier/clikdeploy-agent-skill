@@ -19,6 +19,7 @@ const TIMEOUT_MS = 10 * 60 * 1000;
 const DOMAIN_WAIT_TIMEOUT_MS = 2 * 60 * 1000;
 const DOMAIN_WAIT_INTERVAL_MS = 2000;
 const DEPLOYMENT_WAIT_SLICE_MS = 30 * 1000;
+const SPINNER_FRAMES = ['|', '/', '-', '\\'];
 
 async function postCallback(callbackUrl, callbackToken, payload) {
   if (!callbackUrl) return;
@@ -120,6 +121,48 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function createSpinner(label) {
+  if (!process.stderr.isTTY) {
+    return {
+      succeed: () => {},
+      fail: () => {},
+    };
+  }
+
+  let frameIndex = 0;
+  const render = () => {
+    const frame = SPINNER_FRAMES[frameIndex % SPINNER_FRAMES.length];
+    frameIndex += 1;
+    process.stderr.write(`\r${frame} ${label}...`);
+  };
+
+  render();
+  const timer = setInterval(render, 120);
+
+  return {
+    succeed: (message) => {
+      clearInterval(timer);
+      process.stderr.write(`\r[ok] ${message}\n`);
+    },
+    fail: (message) => {
+      clearInterval(timer);
+      process.stderr.write(`\r[error] ${message}\n`);
+    },
+  };
+}
+
+async function withSpinner(label, fn, doneMessage) {
+  const spinner = createSpinner(label);
+  try {
+    const result = await fn();
+    spinner.succeed(doneMessage || label);
+    return result;
+  } catch (error) {
+    spinner.fail(`${label} failed`);
+    throw error;
+  }
+}
+
 async function waitForAppDomainUrl(apiUrl, apiKey, appId) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < DOMAIN_WAIT_TIMEOUT_MS) {
@@ -213,12 +256,31 @@ async function main() {
   }
 
   let deploymentStatus = deployment || null;
+  let latestApp = null;
+  let url = null;
   if (deployment?.id) {
-    const waitResult = await waitForDeploymentOrAppReady(apiUrl, apiKey, deployment.id, app.id);
+    const waitResult = await withSpinner(
+      'Deploying app',
+      () => waitForDeploymentOrAppReady(apiUrl, apiKey, deployment.id, app.id),
+      'Deployment active'
+    );
     deploymentStatus = waitResult.deployment;
+    if (waitResult.appReady && waitResult.app) {
+      latestApp = waitResult.app;
+      url = buildDomainUrl(latestApp);
+    }
   }
 
-  const { app: latestApp, url } = await waitForAppDomainUrl(apiUrl, apiKey, app.id);
+  if (!url) {
+    const domainReady = await withSpinner(
+      'Waiting for public URL',
+      () => waitForAppDomainUrl(apiUrl, apiKey, app.id),
+      'Public URL ready'
+    );
+    latestApp = domainReady.app;
+    url = domainReady.url;
+  }
+
   const appDisplayName = latestApp?.name || app.name || appName;
   const messageMarkdown = `Your app is now live (flinger point) [${appDisplayName}](${url})`;
 
