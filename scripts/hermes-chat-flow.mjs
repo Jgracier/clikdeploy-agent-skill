@@ -227,14 +227,14 @@ async function main() {
     return;
   }
 
-  if (mode === 'reconnect') {
+  if (mode === 'reconnect' || mode === 'connect') {
     const output = await runReconnect(args, apiUrl);
     process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
     return;
   }
 
   throw new Error(
-    'Unsupported mode. Use start | oauth-link | email-signup | email-login | oauth-complete | reconnect'
+    'Unsupported mode. Use start | oauth-link | email-signup | email-login | oauth-complete | reconnect | connect'
   );
 }
 

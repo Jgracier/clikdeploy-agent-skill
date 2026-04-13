@@ -100,6 +100,12 @@ OAuth completion:
 node scripts/hermes-chat-flow.mjs --mode oauth-complete --one-time-code <code> [--api-url <api_url>] [--callback-url <url>] [--request-id <id>]
 ```
 
+Self-host agent connect:
+
+```bash
+node scripts/hermes-chat-flow.mjs --mode connect [--api-url <api_url>] [--name <machine_name>] [--callback-url <url>] [--request-id <id>]
+```
+
 Self-host reconnect:
 
 ```bash
