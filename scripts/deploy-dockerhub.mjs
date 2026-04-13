@@ -2,7 +2,7 @@
 
 import {
   apiRequest,
-  buildFallbackUrl,
+  buildDomainUrl,
   getApp,
   getServers,
   inferAppNameFromImage,
@@ -16,6 +16,8 @@ import {
 import { loadUserApiKey } from '../lib/local-auth-store.mjs';
 
 const TIMEOUT_MS = 10 * 60 * 1000;
+const DOMAIN_WAIT_TIMEOUT_MS = 2 * 60 * 1000;
+const DOMAIN_WAIT_INTERVAL_MS = 2000;
 
 async function postCallback(callbackUrl, callbackToken, payload) {
   if (!callbackUrl) return;
@@ -106,6 +108,21 @@ async function waitForDeployment(apiUrl, apiKey, deploymentId) {
   throw new Error('Deployment timed out');
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForAppDomainUrl(apiUrl, apiKey, appId) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < DOMAIN_WAIT_TIMEOUT_MS) {
+    const app = await getApp(apiUrl, apiKey, appId);
+    const url = buildDomainUrl(app);
+    if (url) return { app, url };
+    await sleep(DOMAIN_WAIT_INTERVAL_MS);
+  }
+  throw new Error('Deployment completed but app domain URL is not ready yet.');
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
 
@@ -132,7 +149,6 @@ async function main() {
   const appName = args.name ? String(args.name) : inferAppNameFromImage(image);
   const port = parsePort(args.port);
   const environmentVariables = parseEnvArgs(args);
-  const wait = args['no-wait'] ? false : true;
   const callbackUrl = args['callback-url'] ? String(args['callback-url']) : '';
   const callbackToken = args['callback-token'] ? String(args['callback-token']) : '';
   const requestId = args['request-id'] ? String(args['request-id']) : '';
@@ -159,12 +175,13 @@ async function main() {
   }
 
   let deploymentStatus = deployment || null;
-  if (wait && deployment?.id) {
+  if (deployment?.id) {
     deploymentStatus = await waitForDeployment(apiUrl, apiKey, deployment.id);
   }
 
-  const latestApp = await getApp(apiUrl, apiKey, app.id);
-  const url = buildFallbackUrl(server, latestApp || app);
+  const { app: latestApp, url } = await waitForAppDomainUrl(apiUrl, apiKey, app.id);
+  const appDisplayName = latestApp?.name || app.name || appName;
+  const messageMarkdown = `Your app is now live (flinger point) [${appDisplayName}](${url})`;
 
   const output = {
     success: true,
@@ -198,9 +215,10 @@ async function main() {
         }
       : null,
     url,
+    messageMarkdown,
     readyMessage: url
-      ? `Deployment complete. App is reachable at ${url}`
-      : 'Deployment complete, but no URL could be resolved yet.',
+      ? `Your app is now live (flinger point) ${appDisplayName}: ${url}`
+      : 'Deployment complete, but app domain URL is not ready yet.',
   };
 
   await postCallback(callbackUrl, callbackToken, output);

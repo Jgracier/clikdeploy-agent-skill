@@ -64,10 +64,10 @@ node scripts/hermes-chat-flow.mjs --mode oauth-link --provider google
 node scripts/hermes-chat-flow.mjs --mode oauth-complete --one-time-code <CODE>
 
 # Deploy via deterministic Docker Hub selection
-node scripts/deploy-dockerhub.mjs --query n8n --wait --callback-url https://hermes.local/callback --request-id req_456
+node scripts/deploy-dockerhub.mjs --query n8n --callback-url https://hermes.local/callback --request-id req_456
 
 # Optional explicit key override:
-node scripts/deploy-dockerhub.mjs --api-key <cd_live_key> --query n8n --wait
+node scripts/deploy-dockerhub.mjs --api-key <cd_live_key> --query n8n
 ```
 
 `--api-url` remains available when targeting non-default environments.

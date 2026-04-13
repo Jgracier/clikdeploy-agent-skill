@@ -103,19 +103,19 @@ node scripts/hermes-chat-flow.mjs --mode oauth-complete --one-time-code <code> [
 ## 4) Deploy app (deterministic)
 
 ```bash
-node scripts/deploy-dockerhub.mjs --query <app_query> --wait [--api-url <api_url>] [--callback-url <url>] [--request-id <id>]
+node scripts/deploy-dockerhub.mjs --query <app_query> [--api-url <api_url>] [--callback-url <url>] [--request-id <id>]
 ```
 
 or direct image:
 
 ```bash
-node scripts/deploy-dockerhub.mjs --image <repo[:tag]> --wait [--api-url <api_url>] [--callback-url <url>] [--request-id <id>]
+node scripts/deploy-dockerhub.mjs --image <repo[:tag]> [--api-url <api_url>] [--callback-url <url>] [--request-id <id>]
 ```
 
 Optional explicit key override:
 
 ```bash
-node scripts/deploy-dockerhub.mjs --api-key <api_key> --query <app_query> --wait [--api-url <api_url>]
+node scripts/deploy-dockerhub.mjs --api-key <api_key> --query <app_query> [--api-url <api_url>]
 ```
 
 # Callback Events (If callback URL is provided)
