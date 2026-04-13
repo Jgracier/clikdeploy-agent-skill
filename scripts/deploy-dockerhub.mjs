@@ -28,11 +28,18 @@ async function postCallback(callbackUrl, callbackToken, payload) {
   };
   if (callbackToken) headers.Authorization = `Bearer ${callbackToken}`;
   try {
-    await fetch(callbackUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      await fetch(callbackUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
   } catch {
     // callback failures are non-fatal for deploy execution
   }
@@ -253,8 +260,8 @@ async function main() {
       : 'Deployment complete, but app domain URL is not ready yet.',
   };
 
-  await postCallback(callbackUrl, callbackToken, output);
   process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+  await postCallback(callbackUrl, callbackToken, output);
 }
 
 main().catch((error) => {
