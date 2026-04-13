@@ -18,6 +18,7 @@ import { loadUserApiKey } from '../lib/local-auth-store.mjs';
 const TIMEOUT_MS = 10 * 60 * 1000;
 const DOMAIN_WAIT_TIMEOUT_MS = 2 * 60 * 1000;
 const DOMAIN_WAIT_INTERVAL_MS = 2000;
+const DEPLOYMENT_WAIT_SLICE_MS = 30 * 1000;
 
 async function postCallback(callbackUrl, callbackToken, payload) {
   if (!callbackUrl) return;
@@ -75,7 +76,7 @@ function extractAppAndDeployment(payload) {
 async function waitForDeployment(apiUrl, apiKey, deploymentId) {
   const url =
     `${normalizeApiUrl(apiUrl)}/api/deployments/${encodeURIComponent(String(deploymentId))}/wait` +
-    `?wait=1&timeoutMs=${encodeURIComponent(String(TIMEOUT_MS))}`;
+    `?wait=1&timeoutMs=${encodeURIComponent(String(DEPLOYMENT_WAIT_SLICE_MS))}`;
 
   const response = await fetch(url, {
     method: 'GET',
@@ -105,7 +106,7 @@ async function waitForDeployment(apiUrl, apiKey, deploymentId) {
   if (status === 'SUCCESS') return deployment;
   if (status === 'FAILED') throw new Error(String(deployment.error || 'Deployment failed'));
   if (status === 'CANCELLED') throw new Error('Deployment cancelled');
-  throw new Error('Deployment timed out');
+  return deployment;
 }
 
 function sleep(ms) {
@@ -121,6 +122,36 @@ async function waitForAppDomainUrl(apiUrl, apiKey, appId) {
     await sleep(DOMAIN_WAIT_INTERVAL_MS);
   }
   throw new Error('Deployment completed but app domain URL is not ready yet.');
+}
+
+function isAppRunning(app) {
+  const status = String(app?.status || '').toUpperCase();
+  return status === 'RUNNING';
+}
+
+async function waitForDeploymentOrAppReady(apiUrl, apiKey, deploymentId, appId) {
+  const startedAt = Date.now();
+  let lastDeployment = null;
+
+  while (Date.now() - startedAt < TIMEOUT_MS) {
+    const deployment = await waitForDeployment(apiUrl, apiKey, deploymentId);
+    lastDeployment = deployment;
+    const status = String(deployment?.status || '').toUpperCase();
+    if (status === 'SUCCESS') {
+      return { deployment, app: null, appReady: false };
+    }
+    if (status === 'FAILED') throw new Error(String(deployment.error || 'Deployment failed'));
+    if (status === 'CANCELLED') throw new Error('Deployment cancelled');
+
+    const app = await getApp(apiUrl, apiKey, appId);
+    const url = buildDomainUrl(app);
+    if (isAppRunning(app) && url) {
+      return { deployment, app, appReady: true };
+    }
+  }
+
+  if (lastDeployment) return { deployment: lastDeployment, app: null, appReady: false };
+  throw new Error('Deployment timed out');
 }
 
 async function main() {
@@ -176,7 +207,8 @@ async function main() {
 
   let deploymentStatus = deployment || null;
   if (deployment?.id) {
-    deploymentStatus = await waitForDeployment(apiUrl, apiKey, deployment.id);
+    const waitResult = await waitForDeploymentOrAppReady(apiUrl, apiKey, deployment.id, app.id);
+    deploymentStatus = waitResult.deployment;
   }
 
   const { app: latestApp, url } = await waitForAppDomainUrl(apiUrl, apiKey, app.id);
