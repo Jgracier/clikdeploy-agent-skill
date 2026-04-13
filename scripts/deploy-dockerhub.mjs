@@ -21,29 +21,48 @@ const DOMAIN_WAIT_INTERVAL_MS = 2000;
 const DEPLOYMENT_WAIT_SLICE_MS = 30 * 1000;
 const SPINNER_FRAMES = ['|', '/', '-', '\\'];
 
-async function postCallback(callbackUrl, callbackToken, payload) {
-  if (!callbackUrl) return;
+async function postCallback(callbackUrl, callbackToken, payload, options = {}) {
+  if (!callbackUrl) return { delivered: false, skipped: true, attempts: 0 };
+  const maxAttempts = Math.max(1, Number(options.maxAttempts || 5));
   const headers = {
     Accept: 'application/json',
     'Content-Type': 'application/json',
   };
   if (callbackToken) headers.Authorization = `Bearer ${callbackToken}`;
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+  let lastError = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      await fetch(callbackUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timeout);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      let response;
+      try {
+        response = await fetch(callbackUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
+      if (response.ok) {
+        return { delivered: true, skipped: false, attempts: attempt };
+      }
+      lastError = new Error(`Callback HTTP ${response.status}`);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
     }
-  } catch {
-    // callback failures are non-fatal for deploy execution
+    if (attempt < maxAttempts) {
+      const delayMs = Math.min(8000, 500 * 2 ** (attempt - 1));
+      await sleep(delayMs);
+    }
   }
+  return {
+    delivered: false,
+    skipped: false,
+    attempts: maxAttempts,
+    error: lastError instanceof Error ? lastError.message : 'Callback delivery failed',
+  };
 }
 
 function parseEnvArgs(args) {
@@ -323,7 +342,12 @@ async function main() {
   };
 
   process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
-  await postCallback(callbackUrl, callbackToken, output);
+  const callbackResult = await postCallback(callbackUrl, callbackToken, output);
+  if (callbackUrl && !callbackResult.delivered) {
+    throw new Error(
+      `Callback delivery failed after ${callbackResult.attempts} attempts: ${callbackResult.error || 'unknown error'}`
+    );
+  }
 }
 
 main().catch((error) => {
@@ -333,11 +357,16 @@ main().catch((error) => {
   const callbackUrl = args['callback-url'] ? String(args['callback-url']) : '';
   const callbackToken = args['callback-token'] ? String(args['callback-token']) : '';
   const requestId = args['request-id'] ? String(args['request-id']) : '';
-  void postCallback(callbackUrl, callbackToken, {
-    success: false,
-    event: 'app_deploy_failed',
-    requestId: requestId || null,
-    error: message,
-  });
+  void postCallback(
+    callbackUrl,
+    callbackToken,
+    {
+      success: false,
+      event: 'app_deploy_failed',
+      requestId: requestId || null,
+      error: message,
+    },
+    { maxAttempts: 2 }
+  );
   process.exit(1);
 });
