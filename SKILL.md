@@ -52,8 +52,8 @@ node scripts/agent-flow.mjs --mode start [--api-url <api_url>]
 ## 2) Email auth
 
 ```bash
-node scripts/agent-flow.mjs --mode email-signup --email <email> --password <password> [--api-url <api_url>] [--name <machine_name>] [--callback-url <url>] [--request-id <id>]
-node scripts/agent-flow.mjs --mode email-login --email <email> --password <password> [--api-url <api_url>] [--callback-url <url>] [--request-id <id>]
+node scripts/agent-flow.mjs --mode email-signup --email <email> --password <password> [--api-url <api_url>] [--name <machine_name>] [--callback-url <url>]
+node scripts/agent-flow.mjs --mode email-login --email <email> --password <password> [--api-url <api_url>] [--callback-url <url>]
 ```
 
 ## 3) OAuth path
@@ -68,19 +68,19 @@ After OAuth in browser, user pastes the one-time code into this session.
 OAuth completion:
 
 ```bash
-node scripts/agent-flow.mjs --mode oauth-complete --one-time-code <code> [--api-url <api_url>] [--callback-url <url>] [--request-id <id>]
+node scripts/agent-flow.mjs --mode oauth-complete --one-time-code <code> [--api-url <api_url>] [--callback-url <url>]
 ```
 
 Connect:
 
 ```bash
-node scripts/agent-flow.mjs --mode connect [--api-url <api_url>] [--name <machine_name>] [--callback-url <url>] [--request-id <id>]
+node scripts/agent-flow.mjs --mode connect [--api-url <api_url>] [--name <machine_name>] [--callback-url <url>]
 ```
 
 Reconnect:
 
 ```bash
-node scripts/agent-flow.mjs --mode reconnect [--api-url <api_url>] [--name <machine_name>] [--callback-url <url>] [--request-id <id>]
+node scripts/agent-flow.mjs --mode reconnect [--api-url <api_url>] [--name <machine_name>] [--callback-url <url>]
 ```
 
 Auth status check:
@@ -98,7 +98,7 @@ node scripts/agent-flow.mjs --mode logout
 ## 4) Deploy app (minimal input)
 
 ```bash
-node scripts/deploy-dockerhub.mjs --image <repo[:tag]> [--api-url <api_url>] [--callback-url <url>] [--request-id <id>]
+node scripts/deploy-dockerhub.mjs --image <repo[:tag]> [--api-url <api_url>] [--callback-url <url>]
 ```
 
 Image name is the only required deploy input.
@@ -106,23 +106,14 @@ Image name is the only required deploy input.
 Optional lookup mode:
 
 ```bash
-node scripts/deploy-dockerhub.mjs --query <app_query> [--api-url <api_url>] [--callback-url <url>] [--request-id <id>]
+node scripts/deploy-dockerhub.mjs --query <app_query> [--api-url <api_url>] [--callback-url <url>]
 ```
-
-Optional explicit key override:
-
-```bash
-node scripts/deploy-dockerhub.mjs --api-key <api_key> --image <repo[:tag]> [--api-url <api_url>]
-```
-
-Port is assigned automatically.
 
 Optional wait controls:
 
 ```bash
 node scripts/deploy-dockerhub.mjs --image <repo[:tag]> --no-wait
 node scripts/deploy-dockerhub.mjs --image <repo[:tag]> --wait
-node scripts/deploy-dockerhub.mjs --image <repo[:tag]> --wait-timeout-ms <ms>
 ```
 
 # Callback Events

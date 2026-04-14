@@ -34,15 +34,6 @@ function firstNonEmpty(...values) {
   return '';
 }
 
-function parsePort(raw) {
-  if (raw === undefined || raw === null || raw === true) return undefined;
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1 || value > 65535) {
-    throw new Error(`Invalid --port value: ${raw}`);
-  }
-  return value;
-}
-
 function extractAppAndDeployment(payload) {
   const root = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
 
@@ -131,14 +122,13 @@ async function main() {
   }
 
   const apiUrl = normalizeApiUrl(String(args['api-url'] || 'https://clikdeploy.com'));
-  const apiKey = args['api-key'] ? String(args['api-key']) : loadUserApiKey();
+  const apiKey = loadUserApiKey();
   if (!apiKey) {
-    throw new Error('Missing user API key. Run auth flow first or pass --api-key.');
+    throw new Error('Missing user API key. Run auth flow first.');
   }
 
   let image = args.image ? String(args.image) : '';
   const query = args.query ? String(args.query) : '';
-  const explicitServer = args.server ? String(args.server) : undefined;
   if (!image && query) {
     const results = await searchDockerHub(apiUrl, query, { page: 1, limit: 25 });
     if (!results.length) throw new Error(`No Docker Hub results found for query: ${query}`);
@@ -151,22 +141,10 @@ async function main() {
   }
 
   const appName = args.name ? String(args.name) : inferAppNameFromImage(image);
-  const port = parsePort(args.port);
   const environmentVariables = parseEnvArgs(args);
   const callbackUrl = firstNonEmpty(
     args['callback-url'] ? String(args['callback-url']) : '',
-    process.env.HERMES_CALLBACK_URL,
     process.env.CLIKDEPLOY_CALLBACK_URL
-  );
-  const callbackToken = firstNonEmpty(
-    args['callback-token'] ? String(args['callback-token']) : '',
-    process.env.HERMES_CALLBACK_TOKEN,
-    process.env.CLIKDEPLOY_CALLBACK_TOKEN
-  );
-  const requestId = firstNonEmpty(
-    args['request-id'] ? String(args['request-id']) : '',
-    process.env.HERMES_REQUEST_ID,
-    process.env.CLIKDEPLOY_REQUEST_ID
   );
   const waitForTerminal = args.wait
     ? true
@@ -175,20 +153,17 @@ async function main() {
       : callbackUrl
         ? false
         : true;
-  const timeoutMs = args['wait-timeout-ms'] ? Number(args['wait-timeout-ms']) : 15 * 60 * 1000;
+  const timeoutMs = 15 * 60 * 1000;
 
   const servers = await getServers(apiUrl, apiKey);
-  const server = preferHomeAgentServer(servers, explicitServer);
+  const server = preferHomeAgentServer(servers);
 
   const createBody = {
     name: appName,
     dockerImage: image,
     serverId: server.id,
-    ...(port ? { port } : {}),
     ...(Object.keys(environmentVariables).length > 0 ? { environmentVariables } : {}),
     ...(callbackUrl ? { callbackUrl } : {}),
-    ...(callbackToken ? { callbackToken } : {}),
-    ...(requestId ? { requestId } : {}),
   };
 
   const createPayload = await apiRequest(apiUrl, apiKey, '/api/apps', {
@@ -236,7 +211,6 @@ async function main() {
   const output = {
     success: waitForTerminal ? isSuccess : true,
     event: waitForTerminal ? (isSuccess ? 'app_deployed' : 'app_deploy_failed') : 'app_deploy_started',
-    requestId: requestId || null,
     callbackSessionId: callbackSessionId || null,
     app: {
       id: finalApp?.id || app.id,
@@ -244,7 +218,6 @@ async function main() {
       image,
       status: finalApp?.status || app.status || null,
       domain,
-      port: finalApp?.port || app.port || port || 80,
     },
     server: {
       id: server.id,

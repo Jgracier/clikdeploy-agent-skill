@@ -68,11 +68,7 @@ async function runEmailAuthAndOnboard(mode, args, apiUrl) {
     apiKey,
     name,
     callbackUrl: args['callback-url'] ? String(args['callback-url']) : undefined,
-    callbackToken: args['callback-token'] ? String(args['callback-token']) : undefined,
-    requestId: args['request-id'] ? String(args['request-id']) : undefined,
-    runInstaller: args['no-run'] ? false : true,
     waitForReady: args['no-wait'] ? false : true,
-    suggestionLimit: args['suggestion-limit'] ? Number(args['suggestion-limit']) : 6,
   });
 
   const setupLine = 'Signup complete. Self-host setup is complete, and this computer is ready to deploy apps.';
@@ -105,11 +101,7 @@ async function runOauthComplete(args, apiUrl) {
     apiKey,
     name: args.name ? String(args.name) : undefined,
     callbackUrl: args['callback-url'] ? String(args['callback-url']) : undefined,
-    callbackToken: args['callback-token'] ? String(args['callback-token']) : undefined,
-    requestId: args['request-id'] ? String(args['request-id']) : undefined,
-    runInstaller: args['no-run'] ? false : true,
     waitForReady: args['no-wait'] ? false : true,
-    suggestionLimit: args['suggestion-limit'] ? Number(args['suggestion-limit']) : 6,
   });
 
   const setupLine =
@@ -130,7 +122,7 @@ async function runOauthComplete(args, apiUrl) {
 }
 
 async function runReconnect(args, apiUrl) {
-  const apiKey = args['api-key'] ? String(args['api-key']) : loadUserApiKey();
+  const apiKey = loadUserApiKey();
   if (!apiKey) {
     throw new Error(
       'Missing user API key. Sign in first with email/password or OAuth completion.'
@@ -142,11 +134,8 @@ async function runReconnect(args, apiUrl) {
     apiKey,
     name: args.name ? String(args.name) : undefined,
     callbackUrl: args['callback-url'] ? String(args['callback-url']) : undefined,
-    callbackToken: args['callback-token'] ? String(args['callback-token']) : undefined,
-    requestId: args['request-id'] ? String(args['request-id']) : undefined,
     runInstaller: true,
     waitForReady: true,
-    suggestionLimit: args['suggestion-limit'] ? Number(args['suggestion-limit']) : 6,
   });
 
   return {
@@ -161,7 +150,7 @@ async function runReconnect(args, apiUrl) {
 }
 
 async function runAuthStatus(args, apiUrl) {
-  const apiKey = args['api-key'] ? String(args['api-key']) : loadUserApiKey();
+  const apiKey = loadUserApiKey();
   if (!apiKey) {
     return {
       success: true,
@@ -172,20 +161,6 @@ async function runAuthStatus(args, apiUrl) {
         validated: false,
       },
       messageMarkdown: 'Not authenticated.',
-    };
-  }
-
-  const skipValidation = Boolean(args['skip-validate']);
-  if (skipValidation) {
-    return {
-      success: true,
-      flow: 'auth-status',
-      auth: {
-        authenticated: true,
-        hasStoredApiKey: true,
-        validated: false,
-      },
-      messageMarkdown: 'Authenticated (local key found; validation skipped).',
     };
   }
 

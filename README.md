@@ -55,7 +55,7 @@ node scripts/deploy-dockerhub.mjs --image n8nio/n8n
 node scripts/deploy-dockerhub.mjs --query n8n
 
 # Optional callback webhook:
-node scripts/deploy-dockerhub.mjs --image n8nio/n8n --callback-url https://agent.local/callback --request-id req_456
+node scripts/deploy-dockerhub.mjs --image n8nio/n8n --callback-url https://agent.local/callback
 ```
 
 `--api-url` remains available when targeting non-default environments.
