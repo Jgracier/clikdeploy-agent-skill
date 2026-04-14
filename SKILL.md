@@ -115,16 +115,20 @@ Self-host reconnect:
 node scripts/agent-flow.mjs --mode reconnect [--api-url <api_url>] [--name <machine_name>] [--callback-url <url>] [--request-id <id>]
 ```
 
-## 4) Deploy app (deterministic)
-
-```bash
-node scripts/deploy-dockerhub.mjs --query <app_query> [--api-url <api_url>] [--callback-url <url>] [--request-id <id>]
-```
-
-or direct image:
+## 4) Deploy app (minimal input)
 
 ```bash
 node scripts/deploy-dockerhub.mjs --image <repo[:tag]> [--api-url <api_url>] [--callback-url <url>] [--request-id <id>]
+```
+
+Required deploy input:
+
+- Image name only (`--image <repo[:tag]>`)
+
+Optional lookup mode:
+
+```bash
+node scripts/deploy-dockerhub.mjs --query <app_query> [--api-url <api_url>] [--callback-url <url>] [--request-id <id>]
 ```
 
 Optional explicit key override:
@@ -141,7 +145,9 @@ node scripts/deploy-dockerhub.mjs --query <app_query> --wait
 node scripts/deploy-dockerhub.mjs --query <app_query> --wait-timeout-ms <ms>
 ```
 
-# Callback Events (If callback URL is provided)
+# Callback Events
+
+Webhook callback event is built in.
 
 - `self_host_ready`
 - `self_host_failed`

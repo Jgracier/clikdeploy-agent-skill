@@ -40,6 +40,8 @@ Messaging is friendly and short:
 
 ## Callback Events
 
+Webhook callback event is built in.
+
 - `self_host_ready`
 - `self_host_failed`
 - `app_deployed`
@@ -66,11 +68,14 @@ node scripts/agent-flow.mjs --mode oauth-complete --one-time-code <CODE>
 # Reconnect self-host on this machine (full reconnect flow)
 node scripts/agent-flow.mjs --mode reconnect
 
-# Deploy via deterministic Docker Hub selection
-node scripts/deploy-dockerhub.mjs --query n8n --callback-url https://agent.local/callback --request-id req_456
+# Deploy by image name (only required deploy input)
+node scripts/deploy-dockerhub.mjs --image n8nio/n8n
 
-# Optional explicit key override:
-node scripts/deploy-dockerhub.mjs --api-key <cd_live_key> --query n8n
+# Optional lookup mode (query -> auto-pick image):
+node scripts/deploy-dockerhub.mjs --query n8n
+
+# Optional callback webhook:
+node scripts/deploy-dockerhub.mjs --image n8nio/n8n --callback-url https://agent.local/callback --request-id req_456
 ```
 
 `--api-url` remains available when targeting non-default environments.
