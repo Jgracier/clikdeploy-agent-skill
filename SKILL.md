@@ -1,7 +1,7 @@
 ---
 name: clikdeploy_deploy_skill
-description: Use standardized ClikDeploy API endpoints for auth, local credential handling, self-host setup, app search, and app deploy.
-version: 0.3.0
+description: Minimal contract for ClikDeploy auth, local credential reuse, self-host setup, and app deploy.
+version: 0.3.1
 author: ClikDeploy
 license: MIT
 platforms:
@@ -30,113 +30,84 @@ metadata:
     properties:
       api_url:
         type: string
-        description: ClikDeploy base URL (for example https://clikdeploy.com)
+        description: ClikDeploy base URL (default https://clikdeploy.com)
 ---
 
-# Agent Contract
+# Contract
 
-1. Use platform endpoints directly. Do not reimplement platform deploy/auth internals.
-2. Keep onboarding short: authenticate, verify local readiness, then deploy on request.
-3. Persist deploy credentials locally after successful auth so the user is not asked every turn.
-4. Prefer the standardized endpoint and argument contract in this file.
-5. Unknown extra arguments should be ignored unless endpoint validation rejects them.
-6. Use short labeled clickable links in user-facing output when available.
+1. Call platform endpoints directly.
+2. Authenticate once, persist local credential, reuse it for later calls.
+3. Connect/provision self-host before deploy.
+4. After auth success, immediately provision/connect self-host.
+5. Prefer callback-driven status and report progress in chat.
 
-# Platform Communication Rules
+# Base Rules
 
-1. Default `api_url` to `https://clikdeploy.com` when not provided.
-2. Build endpoints as `<api_url><path>` and avoid double slashes.
-3. Use JSON request/response payloads.
-4. Send bearer auth once local credentials exist.
-5. Treat non-2xx as actionable errors and surface short, user-safe remediation.
+- Default `api_url`: `https://clikdeploy.com`
+- Transport: JSON requests/responses
+- Auth header: bearer token from local store when available
+- Never print raw secrets in chat
 
-# Local Auth Handling (Required)
+# Local Auth
 
-Persist credentials locally after successful login/signup/device exchange.
+Store after successful auth (`signup`, `login`, or `device/exchange`).
 
-## Storage
-
-- Preferred auth file:
-  - Linux/macOS: `${XDG_CONFIG_HOME:-~/.config}/clikdeploy/auth.json`
-  - Windows: `${APPDATA}/ClikDeploy/auth.json`
+- Linux/macOS: `${XDG_CONFIG_HOME:-~/.config}/clikdeploy/auth.json`
+- Windows: `${APPDATA}/ClikDeploy/auth.json`
 - Fallback: `~/.clikdeploy/auth.json`
 
-## Minimum stored fields
-
+Minimum fields:
 - `apiUrl`
-- `apiKey` or `accessToken` (whatever deploy endpoints require)
-- `user` (optional metadata)
+- `apiKey` or `accessToken`
 - `updatedAt`
 
-## Runtime precedence
+Lookup precedence:
+1. explicit runtime secret/arg
+2. env override
+3. local auth file
+4. prompt re-auth
 
-1. Explicit runtime arg/secret override
-2. Environment variable override
-3. Stored local auth
-4. Ask user to authenticate
+# Endpoints
 
-## Security
-
-1. Never print raw API keys/tokens in chat output.
-2. Mask secrets in logs (`abcd...wxyz`).
-3. Save with user-only file permissions where supported.
-
-# Standard Endpoints And Arguments
-
-## Auth (CLI)
-
-- `/api/auth/cli/device/init`: `provider`
+Auth:
+- `/api/auth/cli/device/init`: `provider` (`google|github`), `returnUrl` (set `true` so response may include `consentUrl` in addition to `authUrl`)
 - `/api/auth/cli/device/exchange`: `code`
 - `/api/auth/cli/signup`: `email`, `password`, optional `name`
 - `/api/auth/cli/login`: `email`, `password`
 
-Auth success action:
-- Persist returned credential material to local auth store immediately.
+Self-host:
+- `/api/agents/provision`: optional `name` (defaults server-side), `platform`, `arch`, `hostname`
 
-## Self-Host Provision
+Deploy:
+- `/api/apps` (create + deploy)
+- `/api/apps/:id/deploy` (redeploy)
+- `/api/apps/:id` (DELETE app)
 
-- `/api/agents/provision`: `name`, optional `platform`, `arch`, `hostname`
-- Callback args supported by default: `callbackUrl`, `callbackToken`, `requestId`
+Server lifecycle:
+- `/api/servers/:id` (DELETE server)
 
-Self-host success action:
-- Confirm machine is ready for deployment in user-facing output.
+Search:
+- `/api/docker-hub/search`: `q`
 
-## App Create And Deploy
+Advanced only (when caller needs webhook correlation):
+- `callbackUrl`, `callbackToken`, `requestId`
 
-- `/api/apps` (create + deploy): required app/source fields per platform schema
-- `/api/apps/:id/deploy` (redeploy): optional deploy overrides per platform schema
-- Callback args supported by default: `callbackUrl`, `callbackToken`, `requestId`
-- Deployment completion is platform webhook-callback driven.
+# Flow
 
-## Docker Hub Search
+1. Load local auth.
+2. If missing/invalid, offer auth options:
+- email/password signup or login
+- OAuth device flow (`google` or `github`) with `returnUrl=true`, user pastes one-time code
+3. Persist returned credential locally.
+4. Provision self-host.
+5. Deploy by image or by search result.
+6. Return URL + status updates.
+7. On user request, support cleanup actions:
+- delete app via `/api/apps/:id`
+- delete server via `/api/servers/:id`
+- revoke auth by wiping local auth file (and revoke remote key only if a revoke endpoint is available)
 
-- `/api/docker-hub/search`: `q`, optional `page`, `limit`
-
-# Default Agent Flow
-
-1. Check local auth availability.
-2. If missing, offer auth options:
-   - Email signup/login
-   - OAuth device flow (user pastes one-time code from browser)
-3. After auth success, persist local auth and continue without asking for key again.
-4. Ensure self-host is provisioned (or reprovision if needed).
-5. For deploy-by-intent:
-   - If user provides image: deploy directly.
-   - If user provides app intent/query: call Docker Hub search, pick best candidate, then deploy.
-6. Return deployment URL/status and callback-driven progress updates.
-
-# Callback Handling
-
-Callback args (`callbackUrl`, `callbackToken`, `requestId`) should be passed through unchanged when provided.
-
-Agent behavior:
-
-1. Prefer callback-driven completion for provisioning/deploy.
-2. Correlate callbacks by `requestId` when present.
-3. Validate callback token when platform sends one.
-4. If callback is absent, use short polling fallback when available.
-
-## Callback Events
+# Callback Events
 
 - `self_host_ready`
 - `self_host_failed`
@@ -144,17 +115,10 @@ Agent behavior:
 - `app_deployed`
 - `app_deploy_failed`
 
-# Error And Retry Policy
+# Error Policy
 
-1. `401/403`: local auth likely stale; prompt re-auth and replace stored credentials.
-2. `404`: likely wrong `api_url` or resource id; confirm base URL/id.
-3. `409`: treat as already-exists/in-progress; continue idempotently.
-4. `422`: show concise input fix (missing/invalid field).
-5. `429/5xx` or network timeout: retry with capped exponential backoff, then show next step.
-
-# Response Style
-
-1. Keep responses short and actionable.
-2. Prefer clickable markdown labels over raw long links.
-3. Ask for one-time OAuth code only when needed.
-4. Confirm state transitions explicitly: `authenticated`, `machine ready`, `deploy started`, `deploy complete`.
+- `401/403`: re-auth and replace local credential
+- `404`: verify `api_url` or resource id
+- `409`: treat as in-progress/already-exists when safe
+- `422`: show missing/invalid input
+- `429/5xx`: retry with capped exponential backoff
