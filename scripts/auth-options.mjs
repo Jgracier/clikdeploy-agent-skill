@@ -21,8 +21,8 @@ async function main() {
       'Sign up to deploy apps to this machine:',
       `- [Sign up with Google](${googleConsentUrl})`,
       `- [Sign up with GitHub](${githubConsentUrl})`,
-      '- Or use email/password signup/login in chat.',
-      '- After OAuth, copy the one-time code shown and paste it in chat.',
+      '- Or use email/password signup/login in this session.',
+      '- After OAuth, copy the one-time code shown and paste it in this session.',
     ].join('\n'),
     options: [
       {
@@ -48,7 +48,7 @@ async function main() {
       },
     ],
     nextStep:
-      'After OAuth, user pastes the one-time code in chat. Setup then completes automatically.',
+      'After OAuth, user pastes the one-time code in this session. Setup then completes automatically.',
     oauthBehavior: {
       requiresOneTimeCode: true,
     },

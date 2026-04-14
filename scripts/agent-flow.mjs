@@ -39,7 +39,7 @@ function formatStartMessage(googleUrl, githubUrl) {
     'Sign up to deploy apps to this machine:',
     `- [Sign up with Google](${googleUrl})`,
     `- [Sign up with GitHub](${githubUrl})`,
-    '- After OAuth, copy the one-time code and paste it in chat.',
+    '- After OAuth, copy the one-time code and paste it in this session.',
     '- Or reply with email signup/login and provide email + password.',
   ].join('\n');
 }
@@ -203,7 +203,7 @@ async function main() {
           flow: 'oauth-link',
           provider,
           url,
-          messageMarkdown: `[${label}](${url})\n\nAfter signup in browser, copy the one-time code shown and paste it here.`,
+          messageMarkdown: `[${label}](${url})\n\nAfter signup in browser, copy the one-time code shown and paste it in this session.`,
           oauthBehavior: {
             requiresOneTimeCode: true,
           },

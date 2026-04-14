@@ -1,7 +1,7 @@
 {
-  "name": "clikdeploy-hermes-deploy-skill",
+  "name": "clikdeploy-deploy-skill",
   "version": "0.2.0",
-  "description": "Hermes skill for auth -> auto-connect machine -> deterministic app deploy with URL callbacks",
+  "description": "Skill for authentication, machine setup, and app deployment workflows.",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -11,10 +11,10 @@
     "auth:options": "node scripts/auth-options.mjs",
     "onboard:auto": "node scripts/auto-onboard.mjs",
     "deploy:dockerhub": "node scripts/deploy-dockerhub.mjs",
-    "flow:chat": "node scripts/hermes-chat-flow.mjs"
+    "flow:agent": "node scripts/agent-flow.mjs"
   },
   "keywords": [
-    "hermes",
+    "agent",
     "skill",
     "clikdeploy",
     "dockerhub",
