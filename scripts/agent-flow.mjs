@@ -10,7 +10,7 @@ import {
   startDeviceOAuth,
 } from '../lib/clikdeploy-client.mjs';
 import { performAutoOnboard } from '../lib/onboard.mjs';
-import { loadUserApiKey, saveUserApiKey } from '../lib/local-auth-store.mjs';
+import { clearUserApiKey, loadUserApiKey, saveUserApiKey } from '../lib/local-auth-store.mjs';
 
 async function getProviderLink(apiUrl, provider) {
   const init = await startDeviceOAuth(apiUrl, provider);
@@ -217,6 +217,19 @@ async function runAuthStatus(args, apiUrl) {
   }
 }
 
+function runLogout() {
+  const cleared = clearUserApiKey();
+  return {
+    success: true,
+    flow: 'logout',
+    auth: {
+      authenticated: false,
+      keyCleared: cleared,
+    },
+    messageMarkdown: cleared ? 'Logged out. Local authentication has been cleared.' : 'Already logged out.',
+  };
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const mode = String(args.mode || 'start').toLowerCase();
@@ -291,6 +304,12 @@ async function main() {
     return;
   }
 
+  if (mode === 'logout') {
+    const output = runLogout();
+    process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+    return;
+  }
+
   if (mode === 'reconnect' || mode === 'connect') {
     const output = await runReconnect(args, apiUrl);
     process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
@@ -298,7 +317,7 @@ async function main() {
   }
 
   throw new Error(
-    'Unsupported mode. Use start | oauth-link | email-signup | email-login | oauth-complete | auth-status | reconnect | connect'
+    'Unsupported mode. Use start | oauth-link | email-signup | email-login | oauth-complete | auth-status | logout | reconnect | connect'
   );
 }
 

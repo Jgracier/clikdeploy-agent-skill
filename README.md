@@ -71,6 +71,9 @@ node scripts/agent-flow.mjs --mode reconnect
 # Check authentication status
 node scripts/agent-flow.mjs --mode auth-status
 
+# Log out (clear local authentication)
+node scripts/agent-flow.mjs --mode logout
+
 # Deploy by image name (only required deploy input)
 node scripts/deploy-dockerhub.mjs --image n8nio/n8n
 

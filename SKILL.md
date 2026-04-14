@@ -121,6 +121,12 @@ Auth status check:
 node scripts/agent-flow.mjs --mode auth-status [--api-url <api_url>]
 ```
 
+Logout (clear local authentication):
+
+```bash
+node scripts/agent-flow.mjs --mode logout
+```
+
 ## 4) Deploy app (minimal input)
 
 ```bash
