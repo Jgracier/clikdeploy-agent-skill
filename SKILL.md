@@ -130,12 +130,25 @@ Optional explicit key override:
 node scripts/deploy-dockerhub.mjs --api-key <api_key> --query <app_query> [--api-url <api_url>]
 ```
 
+Optional deploy wait controls:
+
+```bash
+node scripts/deploy-dockerhub.mjs --query <app_query> --no-wait
+node scripts/deploy-dockerhub.mjs --query <app_query> --wait
+node scripts/deploy-dockerhub.mjs --query <app_query> --wait-timeout-ms <ms>
+```
+
 # Callback Events (If callback URL is provided)
 
 - `self_host_ready`
 - `self_host_failed`
 - `app_deployed`
 - `app_deploy_failed`
+
+Deploy completion behavior:
+
+- With callback URL present, deploy is callback-driven by default (non-blocking).
+- Use `--wait` only when explicit terminal blocking behavior is required.
 
 # Response Style
 

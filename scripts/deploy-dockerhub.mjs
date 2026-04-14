@@ -2,8 +2,6 @@
 
 import {
   apiRequest,
-  buildDomainUrl,
-  getApp,
   getServers,
   inferAppNameFromImage,
   normalizeApiUrl,
@@ -15,27 +13,7 @@ import {
 } from '../lib/clikdeploy-client.mjs';
 import { loadUserApiKey } from '../lib/local-auth-store.mjs';
 
-const TIMEOUT_MS = 10 * 60 * 1000;
-const DOMAIN_WAIT_TIMEOUT_MS = 2 * 60 * 1000;
-const DOMAIN_WAIT_INTERVAL_MS = 2000;
-
-async function postCallback(callbackUrl, callbackToken, payload) {
-  if (!callbackUrl) return;
-  const headers = {
-    Accept: 'application/json',
-    'Content-Type': 'application/json',
-  };
-  if (callbackToken) headers.Authorization = `Bearer ${callbackToken}`;
-  try {
-    await fetch(callbackUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    // callback failures are non-fatal for deploy execution
-  }
-}
+const TERMINAL_DEPLOY_STATUSES = new Set(['SUCCESS', 'FAILED', 'CANCELLED']);
 
 function parseEnvArgs(args) {
   const envPairs = [];
@@ -47,6 +25,13 @@ function parseEnvArgs(args) {
     }
   }
   return toEnvObject(envPairs);
+}
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return '';
 }
 
 function parsePort(raw) {
@@ -69,58 +54,72 @@ function extractAppAndDeployment(payload) {
     (root?.deployment && typeof root.deployment === 'object' ? root.deployment : null) ||
     (app?.deployments && Array.isArray(app.deployments) ? app.deployments[0] : null);
 
-  return { app, deployment };
+  return { app, deployment, callbackSessionId: root?.callbackSessionId || null };
 }
 
-async function waitForDeployment(apiUrl, apiKey, deploymentId) {
-  const url =
-    `${normalizeApiUrl(apiUrl)}/api/deployments/${encodeURIComponent(String(deploymentId))}/wait` +
-    `?wait=1&timeoutMs=${encodeURIComponent(String(TIMEOUT_MS))}`;
+function extractObject(payload) {
+  if (!payload || typeof payload !== 'object') return null;
+  if (payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
+    return payload.data;
+  }
+  return payload;
+}
 
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Bearer ${apiKey}`,
+function createSpinner(enabled = true) {
+  if (!enabled) {
+    return {
+      update: () => {},
+      stop: () => {},
+    };
+  }
+
+  const frames = ['|', '/', '-', '\\'];
+  let frame = 0;
+  let text = 'Deploying...';
+  const timer = setInterval(() => {
+    const cursor = frames[frame % frames.length];
+    process.stdout.write(`\r${cursor} ${text}`);
+    frame += 1;
+  }, 100);
+
+  return {
+    update(nextText) {
+      text = String(nextText || text);
     },
-  });
-  const text = await response.text();
-  let payload;
-  try {
-    payload = JSON.parse(text);
-  } catch {
-    payload = { success: false, raw: text };
-  }
-  if (!response.ok) {
-    const msg = payload?.error || `Deployment wait failed (${response.status})`;
-    throw new Error(String(msg));
-  }
-
-  const deployment = payload?.data?.deployment || null;
-  if (!deployment || !deployment.id) {
-    throw new Error('Deployment wait response missing deployment payload');
-  }
-
-  const status = String(deployment.status || '').toUpperCase();
-  if (status === 'SUCCESS') return deployment;
-  if (status === 'FAILED') throw new Error(String(deployment.error || 'Deployment failed'));
-  if (status === 'CANCELLED') throw new Error('Deployment cancelled');
-  throw new Error('Deployment timed out');
+    stop(finalLine = '') {
+      clearInterval(timer);
+      process.stdout.write('\r');
+      process.stdout.write(' '.repeat(Math.max(8, text.length + 4)));
+      process.stdout.write('\r');
+      if (finalLine) process.stdout.write(`${finalLine}\n`);
+    },
+  };
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function waitForAppDomainUrl(apiUrl, apiKey, appId) {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < DOMAIN_WAIT_TIMEOUT_MS) {
-    const app = await getApp(apiUrl, apiKey, appId);
-    const url = buildDomainUrl(app);
-    if (url) return { app, url };
-    await sleep(DOMAIN_WAIT_INTERVAL_MS);
+async function pollDeploymentUntilTerminal({
+  apiUrl,
+  apiKey,
+  deploymentId,
+  timeoutMs,
+  spinner,
+}) {
+  if (!deploymentId) {
+    throw new Error('Missing deployment id for wait operation');
   }
-  throw new Error('Deployment completed but app domain URL is not ready yet.');
+
+  spinner.update('Waiting for deployment completion event...');
+  const waitPayload = await apiRequest(
+    apiUrl,
+    apiKey,
+    `/api/deployments/${encodeURIComponent(String(deploymentId))}/wait?wait=1&timeoutMs=${encodeURIComponent(String(timeoutMs))}`
+  );
+  const waitData = extractObject(waitPayload) || {};
+  const latest = waitData?.deployment || null;
+  const status = String(latest?.status || '').toUpperCase();
+  if (status && TERMINAL_DEPLOY_STATUSES.has(status)) {
+    return latest;
+  }
+  throw new Error(`Deployment wait timed out after ${Math.floor(timeoutMs / 1000)}s`);
 }
 
 async function main() {
@@ -131,9 +130,9 @@ async function main() {
   if (!apiKey) {
     throw new Error('Missing user API key. Run auth flow first or pass --api-key.');
   }
+
   let image = args.image ? String(args.image) : '';
   const query = args.query ? String(args.query) : '';
-  const autoPick = Boolean(query);
   const explicitServer = args.server ? String(args.server) : undefined;
   if (!image && query) {
     const results = await searchDockerHub(apiUrl, query, { page: 1, limit: 25 });
@@ -143,15 +142,35 @@ async function main() {
     image = String(picked.name);
   }
   if (!image) {
-    throw new Error('Missing image. Use --image <repo[:tag]> or --query <term>.');
+    throw new Error('Missing target. Use --query <app_query> or --image <repo[:tag]>.');
   }
 
   const appName = args.name ? String(args.name) : inferAppNameFromImage(image);
   const port = parsePort(args.port);
   const environmentVariables = parseEnvArgs(args);
-  const callbackUrl = args['callback-url'] ? String(args['callback-url']) : '';
-  const callbackToken = args['callback-token'] ? String(args['callback-token']) : '';
-  const requestId = args['request-id'] ? String(args['request-id']) : '';
+  const callbackUrl = firstNonEmpty(
+    args['callback-url'] ? String(args['callback-url']) : '',
+    process.env.HERMES_CALLBACK_URL,
+    process.env.CLIKDEPLOY_CALLBACK_URL
+  );
+  const callbackToken = firstNonEmpty(
+    args['callback-token'] ? String(args['callback-token']) : '',
+    process.env.HERMES_CALLBACK_TOKEN,
+    process.env.CLIKDEPLOY_CALLBACK_TOKEN
+  );
+  const requestId = firstNonEmpty(
+    args['request-id'] ? String(args['request-id']) : '',
+    process.env.HERMES_REQUEST_ID,
+    process.env.CLIKDEPLOY_REQUEST_ID
+  );
+  const waitForTerminal = args.wait
+    ? true
+    : args['no-wait']
+      ? false
+      : callbackUrl
+        ? false
+        : true;
+  const timeoutMs = args['wait-timeout-ms'] ? Number(args['wait-timeout-ms']) : 15 * 60 * 1000;
 
   const servers = await getServers(apiUrl, apiKey);
   const server = preferHomeAgentServer(servers, explicitServer);
@@ -162,6 +181,9 @@ async function main() {
     serverId: server.id,
     ...(port ? { port } : {}),
     ...(Object.keys(environmentVariables).length > 0 ? { environmentVariables } : {}),
+    ...(callbackUrl ? { callbackUrl } : {}),
+    ...(callbackToken ? { callbackToken } : {}),
+    ...(requestId ? { requestId } : {}),
   };
 
   const createPayload = await apiRequest(apiUrl, apiKey, '/api/apps', {
@@ -169,31 +191,55 @@ async function main() {
     body: createBody,
   });
 
-  const { app, deployment } = extractAppAndDeployment(createPayload);
+  const { app, deployment, callbackSessionId } = extractAppAndDeployment(createPayload);
   if (!app?.id) {
     throw new Error('Create app response did not return an app id');
   }
 
-  let deploymentStatus = deployment || null;
-  if (deployment?.id) {
-    deploymentStatus = await waitForDeployment(apiUrl, apiKey, deployment.id);
+  let finalDeployment = deployment || null;
+  let finalApp = app;
+
+  if (waitForTerminal) {
+    const spinner = createSpinner(true);
+    try {
+      spinner.update(`${app.name || appName}: DEPLOYING`);
+      finalDeployment = await pollDeploymentUntilTerminal({
+        apiUrl,
+        apiKey,
+        deploymentId: deployment?.id,
+        timeoutMs,
+        spinner,
+      });
+
+      const refreshedAppPayload = await apiRequest(apiUrl, apiKey, `/api/apps/${encodeURIComponent(app.id)}`);
+      finalApp = extractObject(refreshedAppPayload) || app;
+      spinner.stop(
+        String(finalDeployment?.status || '').toUpperCase() === 'SUCCESS'
+          ? `OK ${app.name || appName}: deployment completed`
+          : `FAILED ${app.name || appName}: deployment ${String(finalDeployment?.status || 'failed').toLowerCase()}`
+      );
+    } catch (error) {
+      spinner.stop(`FAILED ${app.name || appName}: deployment monitoring failed`);
+      throw error;
+    }
   }
 
-  const { app: latestApp, url } = await waitForAppDomainUrl(apiUrl, apiKey, app.id);
-  const appDisplayName = latestApp?.name || app.name || appName;
-  const messageMarkdown = `Your app is now live (flinger point) [${appDisplayName}](${url})`;
-
+  const finalStatus = String(finalDeployment?.status || deployment?.status || '').toUpperCase();
+  const domain = finalApp?.domain || app?.domain || null;
+  const url = domain ? `https://${domain}` : null;
+  const isSuccess = finalStatus === 'SUCCESS';
   const output = {
-    success: true,
-    event: 'app_deployed',
+    success: waitForTerminal ? isSuccess : true,
+    event: waitForTerminal ? (isSuccess ? 'app_deployed' : 'app_deploy_failed') : 'app_deploy_started',
     requestId: requestId || null,
+    callbackSessionId: callbackSessionId || null,
     app: {
-      id: app.id,
-      name: latestApp?.name || app.name || appName,
+      id: finalApp?.id || app.id,
+      name: finalApp?.name || app.name || appName,
       image,
-      status: latestApp?.status || app.status || null,
-      domain: latestApp?.domain || null,
-      port: latestApp?.port || app.port || port || 80,
+      status: finalApp?.status || app.status || null,
+      domain,
+      port: finalApp?.port || app.port || port || 80,
     },
     server: {
       id: server.id,
@@ -204,39 +250,32 @@ async function main() {
       ipAddress: server.ipAddress || null,
     },
     source: {
+      image,
       query: query || null,
-      autoPick,
+      autoPick: Boolean(query && !args.image),
     },
-    deployment: deploymentStatus
+    deployment: finalDeployment
       ? {
-          id: deploymentStatus.id || deployment?.id || null,
-          status: deploymentStatus.status || null,
-          error: deploymentStatus.error || null,
+          id: finalDeployment.id || null,
+          status: finalDeployment.status || null,
+          error: finalDeployment.error || null,
         }
       : null,
-    url,
-    messageMarkdown,
-    readyMessage: url
-      ? `Your app is now live (flinger point) ${appDisplayName}: ${url}`
-      : 'Deployment complete, but app domain URL is not ready yet.',
+    ...(url ? { url } : {}),
+    messageMarkdown: waitForTerminal
+      ? isSuccess
+        ? `Your app is now live: ${url || '(URL pending)'}`
+        : `Deployment failed${finalDeployment?.error ? `: ${finalDeployment.error}` : '.'}`
+      : callbackSessionId
+        ? 'Deployment started. Completion is callback-driven and will be sent by webhook.'
+        : 'Deployment started.',
   };
 
-  await postCallback(callbackUrl, callbackToken, output);
   process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
 }
 
 main().catch((error) => {
   const message = error instanceof Error ? error.message : String(error);
   process.stderr.write(`ERROR: ${message}\n`);
-  const args = parseArgs(process.argv.slice(2));
-  const callbackUrl = args['callback-url'] ? String(args['callback-url']) : '';
-  const callbackToken = args['callback-token'] ? String(args['callback-token']) : '';
-  const requestId = args['request-id'] ? String(args['request-id']) : '';
-  void postCallback(callbackUrl, callbackToken, {
-    success: false,
-    event: 'app_deploy_failed',
-    requestId: requestId || null,
-    error: message,
-  });
   process.exit(1);
 });
