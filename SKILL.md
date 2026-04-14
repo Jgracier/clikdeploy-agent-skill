@@ -34,6 +34,10 @@ metadata:
           description: ClikDeploy base URL (for example https://clikdeploy.com)
 ---
 
+# Source Repository
+
+- `https://github.com/Jgracier/clikdeploy-agent-skill.git`
+
 # Agent Contract
 
 Hermes should operate with this simple model:
