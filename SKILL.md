@@ -1,7 +1,7 @@
 ---
 name: clikdeploy_deploy_skill
-description: Guide authentication, prepare this machine for app deployment, and provide deployment access.
-version: 0.2.0
+description: Use standardized ClikDeploy API endpoints for auth, local credential handling, self-host setup, app search, and app deploy.
+version: 0.3.0
 author: ClikDeploy
 license: MIT
 platforms:
@@ -35,101 +35,126 @@ metadata:
 
 # Agent Contract
 
-1. User signs up/authenticates.
-2. If OAuth is used, user pastes a one-time code from browser into this session.
-3. Deploy capability is connected automatically.
-4. Agent deploys apps on request.
-5. Persist local credentials so deploy commands do not require re-auth each time.
+1. Use platform endpoints directly. Do not reimplement platform deploy/auth internals.
+2. Keep onboarding short: authenticate, verify local readiness, then deploy on request.
+3. Persist deploy credentials locally after successful auth so the user is not asked every turn.
+4. Prefer the standardized endpoint and argument contract in this file.
+5. Unknown extra arguments should be ignored unless endpoint validation rejects them.
+6. Use short labeled clickable links in user-facing output when available.
 
-# Script Interface (Use These)
+# Platform Communication Rules
 
-## 1) Start auth flow
+1. Default `api_url` to `https://clikdeploy.com` when not provided.
+2. Build endpoints as `<api_url><path>` and avoid double slashes.
+3. Use JSON request/response payloads.
+4. Send bearer auth once local credentials exist.
+5. Treat non-2xx as actionable errors and surface short, user-safe remediation.
 
-```bash
-node scripts/agent-flow.mjs --mode start [--api-url <api_url>]
-```
+# Local Auth Handling (Required)
 
-## 2) Email auth
+Persist credentials locally after successful login/signup/device exchange.
 
-```bash
-node scripts/agent-flow.mjs --mode email-signup --email <email> --password <password> [--api-url <api_url>] [--name <machine_name>] [--callback-url <url>]
-node scripts/agent-flow.mjs --mode email-login --email <email> --password <password> [--api-url <api_url>] [--callback-url <url>]
-```
+## Storage
 
-## 3) OAuth path
+- Preferred auth file:
+  - Linux/macOS: `${XDG_CONFIG_HOME:-~/.config}/clikdeploy/auth.json`
+  - Windows: `${APPDATA}/ClikDeploy/auth.json`
+- Fallback: `~/.clikdeploy/auth.json`
 
-```bash
-node scripts/agent-flow.mjs --mode oauth-link --provider google [--api-url <api_url>]
-node scripts/agent-flow.mjs --mode oauth-link --provider github [--api-url <api_url>]
-```
+## Minimum stored fields
 
-After OAuth in browser, user pastes the one-time code into this session.
+- `apiUrl`
+- `apiKey` or `accessToken` (whatever deploy endpoints require)
+- `user` (optional metadata)
+- `updatedAt`
 
-OAuth completion:
+## Runtime precedence
 
-```bash
-node scripts/agent-flow.mjs --mode oauth-complete --one-time-code <code> [--api-url <api_url>] [--callback-url <url>]
-```
+1. Explicit runtime arg/secret override
+2. Environment variable override
+3. Stored local auth
+4. Ask user to authenticate
 
-Connect:
+## Security
 
-```bash
-node scripts/agent-flow.mjs --mode connect [--api-url <api_url>] [--name <machine_name>] [--callback-url <url>]
-```
+1. Never print raw API keys/tokens in chat output.
+2. Mask secrets in logs (`abcd...wxyz`).
+3. Save with user-only file permissions where supported.
 
-Reconnect:
+# Standard Endpoints And Arguments
 
-```bash
-node scripts/agent-flow.mjs --mode reconnect [--api-url <api_url>] [--name <machine_name>] [--callback-url <url>]
-```
+## Auth (CLI)
 
-Auth status check:
+- `/api/auth/cli/device/init`: `provider`
+- `/api/auth/cli/device/exchange`: `code`
+- `/api/auth/cli/signup`: `email`, `password`, optional `name`
+- `/api/auth/cli/login`: `email`, `password`
 
-```bash
-node scripts/agent-flow.mjs --mode auth-status [--api-url <api_url>]
-```
+Auth success action:
+- Persist returned credential material to local auth store immediately.
 
-Logout (clear local authentication):
+## Self-Host Provision
 
-```bash
-node scripts/agent-flow.mjs --mode logout
-```
+- `/api/agents/provision`: `name`, optional `platform`, `arch`, `hostname`
+- Callback args supported by default: `callbackUrl`, `callbackToken`, `requestId`
 
-## 4) Deploy app (minimal input)
+Self-host success action:
+- Confirm machine is ready for deployment in user-facing output.
 
-```bash
-node scripts/deploy-dockerhub.mjs --image <repo[:tag]> [--api-url <api_url>] [--callback-url <url>]
-```
+## App Create And Deploy
 
-Image name is the only required deploy input.
+- `/api/apps` (create + deploy): required app/source fields per platform schema
+- `/api/apps/:id/deploy` (redeploy): optional deploy overrides per platform schema
+- Callback args supported by default: `callbackUrl`, `callbackToken`, `requestId`
+- Deployment completion is platform webhook-callback driven.
 
-Optional lookup mode:
+## Docker Hub Search
 
-```bash
-node scripts/deploy-dockerhub.mjs --query <app_query> [--api-url <api_url>] [--callback-url <url>]
-```
+- `/api/docker-hub/search`: `q`, optional `page`, `limit`
 
-Optional wait controls:
+# Default Agent Flow
 
-```bash
-node scripts/deploy-dockerhub.mjs --image <repo[:tag]> --no-wait
-node scripts/deploy-dockerhub.mjs --image <repo[:tag]> --wait
-```
+1. Check local auth availability.
+2. If missing, offer auth options:
+   - Email signup/login
+   - OAuth device flow (user pastes one-time code from browser)
+3. After auth success, persist local auth and continue without asking for key again.
+4. Ensure self-host is provisioned (or reprovision if needed).
+5. For deploy-by-intent:
+   - If user provides image: deploy directly.
+   - If user provides app intent/query: call Docker Hub search, pick best candidate, then deploy.
+6. Return deployment URL/status and callback-driven progress updates.
 
-# Callback Events
+# Callback Handling
 
-Webhook callback event is built in.
+Callback args (`callbackUrl`, `callbackToken`, `requestId`) should be passed through unchanged when provided.
+
+Agent behavior:
+
+1. Prefer callback-driven completion for provisioning/deploy.
+2. Correlate callbacks by `requestId` when present.
+3. Validate callback token when platform sends one.
+4. If callback is absent, use short polling fallback when available.
+
+## Callback Events
 
 - `self_host_ready`
 - `self_host_failed`
+- `app_deploy_started`
 - `app_deployed`
 - `app_deploy_failed`
 
-Deploy completion behavior:
+# Error And Retry Policy
 
-- With callback URL present, deploy is callback-driven by default (non-blocking).
-- Use `--wait` only when explicit terminal blocking behavior is required.
+1. `401/403`: local auth likely stale; prompt re-auth and replace stored credentials.
+2. `404`: likely wrong `api_url` or resource id; confirm base URL/id.
+3. `409`: treat as already-exists/in-progress; continue idempotently.
+4. `422`: show concise input fix (missing/invalid field).
+5. `429/5xx` or network timeout: retry with capped exponential backoff, then show next step.
 
-# Output Preference
+# Response Style
 
-- Prefer short labeled clickable links over raw long URLs when available.
+1. Keep responses short and actionable.
+2. Prefer clickable markdown labels over raw long links.
+3. Ask for one-time OAuth code only when needed.
+4. Confirm state transitions explicitly: `authenticated`, `machine ready`, `deploy started`, `deploy complete`.
