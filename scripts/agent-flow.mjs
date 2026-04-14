@@ -2,6 +2,7 @@
 
 import {
   exchangeDeviceOAuthCode,
+  getServers,
   normalizeApiUrl,
   parseArgs,
   requireArg,
@@ -159,6 +160,63 @@ async function runReconnect(args, apiUrl) {
   };
 }
 
+async function runAuthStatus(args, apiUrl) {
+  const apiKey = args['api-key'] ? String(args['api-key']) : loadUserApiKey();
+  if (!apiKey) {
+    return {
+      success: true,
+      flow: 'auth-status',
+      auth: {
+        authenticated: false,
+        hasStoredApiKey: false,
+        validated: false,
+      },
+      messageMarkdown: 'Not authenticated.',
+    };
+  }
+
+  const skipValidation = Boolean(args['skip-validate']);
+  if (skipValidation) {
+    return {
+      success: true,
+      flow: 'auth-status',
+      auth: {
+        authenticated: true,
+        hasStoredApiKey: true,
+        validated: false,
+      },
+      messageMarkdown: 'Authenticated (local key found; validation skipped).',
+    };
+  }
+
+  try {
+    const servers = await getServers(apiUrl, apiKey);
+    return {
+      success: true,
+      flow: 'auth-status',
+      auth: {
+        authenticated: true,
+        hasStoredApiKey: true,
+        validated: true,
+        serverCount: Array.isArray(servers) ? servers.length : 0,
+      },
+      messageMarkdown: 'Authenticated.',
+    };
+  } catch (error) {
+    return {
+      success: true,
+      flow: 'auth-status',
+      auth: {
+        authenticated: false,
+        hasStoredApiKey: true,
+        validated: true,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      messageMarkdown: 'Not authenticated.',
+    };
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const mode = String(args.mode || 'start').toLowerCase();
@@ -227,6 +285,12 @@ async function main() {
     return;
   }
 
+  if (mode === 'auth-status') {
+    const output = await runAuthStatus(args, apiUrl);
+    process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+    return;
+  }
+
   if (mode === 'reconnect' || mode === 'connect') {
     const output = await runReconnect(args, apiUrl);
     process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
@@ -234,7 +298,7 @@ async function main() {
   }
 
   throw new Error(
-    'Unsupported mode. Use start | oauth-link | email-signup | email-login | oauth-complete | reconnect | connect'
+    'Unsupported mode. Use start | oauth-link | email-signup | email-login | oauth-complete | auth-status | reconnect | connect'
   );
 }
 

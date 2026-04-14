@@ -115,6 +115,12 @@ Self-host reconnect:
 node scripts/agent-flow.mjs --mode reconnect [--api-url <api_url>] [--name <machine_name>] [--callback-url <url>] [--request-id <id>]
 ```
 
+Auth status check:
+
+```bash
+node scripts/agent-flow.mjs --mode auth-status [--api-url <api_url>]
+```
+
 ## 4) Deploy app (minimal input)
 
 ```bash
