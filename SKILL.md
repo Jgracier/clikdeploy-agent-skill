@@ -33,52 +33,23 @@ metadata:
         description: ClikDeploy base URL (for example https://clikdeploy.com)
 ---
 
-# Source Repository
-
-- `https://github.com/Jgracier/clikdeploy-agent-skill.git`
-
 # Agent Contract
 
-The agent should operate with this simple model:
-
 1. User signs up/authenticates.
-2. If OAuth is used, user pastes a one-time code from browser back into chat.
+2. If OAuth is used, user pastes a one-time code from browser into this session.
 3. Deploy capability is connected automatically.
-4. The agent can deploy apps on user request.
-
-The agent should keep this simple for users: sign up, confirm machine is ready, then deploy apps on request.
-The agent should ask for one-time OAuth code only.
-Auth should persist user deploy credentials locally so deploy commands can run without asking for key input again.
-
-# What The Agent Should Say
-
-When unauthenticated:
-
-- Offer:
-  - "Sign up to deploy apps to this machine."
-  - Email/password signup/login
-  - [Sign up with Google](...) 
-  - [Sign up with GitHub](...)
-
-After auth completes:
-
-- Confirm readiness: machine is ready to deploy apps.
-- Offer suggested apps users find helpful.
-
-After deploy:
-
-- Confirm app is up.
-- Provide URL.
+4. Agent deploys apps on request.
+5. Persist local credentials so deploy commands do not require re-auth each time.
 
 # Script Interface (Use These)
 
-## 1) Start auth flow (agent-safe options)
+## 1) Start auth flow
 
 ```bash
 node scripts/agent-flow.mjs --mode start [--api-url <api_url>]
 ```
 
-## 2) Email path (auto-connect happens in flow)
+## 2) Email auth
 
 ```bash
 node scripts/agent-flow.mjs --mode email-signup --email <email> --password <password> [--api-url <api_url>] [--name <machine_name>] [--callback-url <url>] [--request-id <id>]
@@ -92,10 +63,7 @@ node scripts/agent-flow.mjs --mode oauth-link --provider google [--api-url <api_
 node scripts/agent-flow.mjs --mode oauth-link --provider github [--api-url <api_url>]
 ```
 
-After the user completes OAuth in browser:
-
-- User gets a one-time code on the callback page and pastes it in chat.
-- Continue onboarding automatically after code is provided.
+After OAuth in browser, user pastes the one-time code into this session.
 
 OAuth completion:
 
@@ -103,13 +71,13 @@ OAuth completion:
 node scripts/agent-flow.mjs --mode oauth-complete --one-time-code <code> [--api-url <api_url>] [--callback-url <url>] [--request-id <id>]
 ```
 
-Self-host agent connect:
+Connect:
 
 ```bash
 node scripts/agent-flow.mjs --mode connect [--api-url <api_url>] [--name <machine_name>] [--callback-url <url>] [--request-id <id>]
 ```
 
-Self-host reconnect:
+Reconnect:
 
 ```bash
 node scripts/agent-flow.mjs --mode reconnect [--api-url <api_url>] [--name <machine_name>] [--callback-url <url>] [--request-id <id>]
@@ -133,9 +101,7 @@ node scripts/agent-flow.mjs --mode logout
 node scripts/deploy-dockerhub.mjs --image <repo[:tag]> [--api-url <api_url>] [--callback-url <url>] [--request-id <id>]
 ```
 
-Required deploy input:
-
-- Image name only (`--image <repo[:tag]>`)
+Image name is the only required deploy input.
 
 Optional lookup mode:
 
@@ -146,15 +112,17 @@ node scripts/deploy-dockerhub.mjs --query <app_query> [--api-url <api_url>] [--c
 Optional explicit key override:
 
 ```bash
-node scripts/deploy-dockerhub.mjs --api-key <api_key> --query <app_query> [--api-url <api_url>]
+node scripts/deploy-dockerhub.mjs --api-key <api_key> --image <repo[:tag]> [--api-url <api_url>]
 ```
 
-Optional deploy wait controls:
+Port is assigned automatically.
+
+Optional wait controls:
 
 ```bash
-node scripts/deploy-dockerhub.mjs --query <app_query> --no-wait
-node scripts/deploy-dockerhub.mjs --query <app_query> --wait
-node scripts/deploy-dockerhub.mjs --query <app_query> --wait-timeout-ms <ms>
+node scripts/deploy-dockerhub.mjs --image <repo[:tag]> --no-wait
+node scripts/deploy-dockerhub.mjs --image <repo[:tag]> --wait
+node scripts/deploy-dockerhub.mjs --image <repo[:tag]> --wait-timeout-ms <ms>
 ```
 
 # Callback Events
@@ -171,9 +139,6 @@ Deploy completion behavior:
 - With callback URL present, deploy is callback-driven by default (non-blocking).
 - Use `--wait` only when explicit terminal blocking behavior is required.
 
-# Response Style
+# Output Preference
 
-- Keep messages short and actionable.
-- Prefer clickable markdown labels over raw long links.
-- Never print API keys back to the user.
-- Ask for one-time OAuth code only when needed.
+- Prefer short labeled clickable links over raw long URLs when available.

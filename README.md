@@ -1,42 +1,16 @@
 # ClikDeploy Deploy Skill
 
-An agent skill that keeps user experience simple:
-
-1. User signs up/authenticates.
-2. For OAuth, user completes consent and pastes a one-time code in chat.
-3. Machine is connected automatically for deployments.
-4. The agent deploys open-source apps and returns the URL.
-
-After auth completes, the user API key is saved locally to `~/.clikdeploy/api-key` for future deploy calls.
+Minimal skill for auth, machine connect, and app deployment.
+After auth, the user API key is stored at `~/.clikdeploy/api-key` for later deploy commands.
 
 ## What This Repo Includes
 
 - `SKILL.md`: skill contract (minimal agent-facing behavior)
 - `scripts/agent-flow.mjs`: auth orchestration + auto-connect trigger
 - `scripts/auto-onboard.mjs`: direct onboarding wrapper
-- `scripts/deploy-dockerhub.mjs`: deterministic Docker Hub search/rank/deploy + callback
+- `scripts/deploy-dockerhub.mjs`: deploy by image (or optional query lookup) + callback
 - `scripts/auth-options.mjs`: signup options output
 - `examples/callback-events.json`: callback payload examples
-
-## Signup Options Shown In Chat
-
-- Email + password
-- Sign up with Google
-- Sign up with GitHub
-
-Messaging is friendly and short:
-
-- "Sign up to deploy apps to this machine"
-- One-time code paste step after OAuth
-
-## Auto Connect
-
-- Auto-connect after auth completion
-- Docker image selection when using query mode:
-  - highest pull count
-  - then highest stars
-  - then trusted/official flags
-- Callback events for readiness and deployment outcomes
 
 ## Callback Events
 
@@ -52,7 +26,7 @@ See `examples/callback-events.json` for payload shapes.
 ## Local Usage
 
 ```bash
-# Start agent-safe auth options
+# Start auth flow
 node scripts/agent-flow.mjs --mode start
 
 # Email signup/login + auto-connect
@@ -62,7 +36,7 @@ node scripts/agent-flow.mjs --mode email-login --email you@example.com --passwor
 # OAuth link (user-facing)
 node scripts/agent-flow.mjs --mode oauth-link --provider google
 
-# OAuth completion (preferred: one-time code from callback page)
+# OAuth completion
 node scripts/agent-flow.mjs --mode oauth-complete --one-time-code <CODE>
 
 # Reconnect self-host on this machine (full reconnect flow)
