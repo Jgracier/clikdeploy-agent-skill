@@ -231,7 +231,12 @@ function runLogout() {
 }
 
 async function main() {
-  const args = parseArgs(process.argv.slice(2));
+  const rawArgv = process.argv.slice(2);
+  const args = parseArgs(rawArgv);
+  if (args.help || rawArgv.includes('-h')) {
+    process.stdout.write('read skill.md\n');
+    return;
+  }
   const mode = String(args.mode || 'start').toLowerCase();
   const apiUrl = normalizeApiUrl(String(args['api-url'] || 'https://clikdeploy.com'));
 
