@@ -2,7 +2,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { spawn, spawnSync } from 'child_process';
+import { spawnSync } from 'child_process';
 
 const DEFAULT_API_URL = 'https://clikdeploy.com';
 
@@ -105,50 +105,18 @@ function tryRun(cmd, args) {
   }
 }
 
-function resolveSelfHostBinaryPath() {
-  try {
-    const out = spawnSync('bash', ['-lc', 'command -v clikdeploy-self-host || true'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
-    const bin = String(out.stdout || '').trim();
-    return bin || '';
-  } catch {
-    return '';
-  }
-}
-
-function startSelfHostRuntimeFallback() {
-  const bin = resolveSelfHostBinaryPath();
-  if (!bin) return false;
-  try {
-    const child = spawn(bin, [], {
-      detached: true,
-      stdio: 'ignore',
-    });
-    child.unref();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function restartSelfHostRuntime() {
   if (process.platform === 'linux') {
     const ok = tryRun('systemctl', ['--user', 'restart', 'clikdeploy-self-host.service']);
     if (ok) return true;
-    const started = tryRun('systemctl', ['--user', 'start', 'clikdeploy-self-host.service']);
-    if (started) return true;
-    return startSelfHostRuntimeFallback();
+    return tryRun('systemctl', ['--user', 'start', 'clikdeploy-self-host.service']);
   }
   if (process.platform === 'darwin') {
     const uid = String(process.getuid ? process.getuid() : '').trim();
-    if (!uid) return startSelfHostRuntimeFallback();
-    const kicked = tryRun('launchctl', ['kickstart', '-k', `gui/${uid}/com.clikdeploy.self-host`]);
-    if (kicked) return true;
-    return startSelfHostRuntimeFallback();
+    if (!uid) return false;
+    return tryRun('launchctl', ['kickstart', '-k', `gui/${uid}/com.clikdeploy.self-host`]);
   }
-  return startSelfHostRuntimeFallback();
+  return false;
 }
 
 function stopSelfHostRuntime() {
@@ -232,6 +200,44 @@ function printJson(obj) {
   process.stdout.write(`${JSON.stringify(obj)}\n`);
 }
 
+async function runSelfHostInstaller(apiUrl, serverId, agentToken, agentId) {
+  const baseUrl = normalizeApiUrl(apiUrl);
+  const installUrl = `${baseUrl}/install.sh`;
+  const scriptRes = await fetch(installUrl, { method: 'GET' });
+  if (!scriptRes.ok) {
+    throw new Error(`Failed to fetch installer script (${scriptRes.status})`);
+  }
+  const script = await scriptRes.text();
+  if (!script || !script.includes('ClikDeploy Agent Installer')) {
+    throw new Error('Installer payload invalid');
+  }
+
+  const args = ['-s', '--', '--token', agentToken, '--server-id', serverId, '--server', baseUrl];
+  if (agentId) args.push('--agent-id', agentId);
+
+  const run = spawnSync('bash', args, {
+    input: script,
+    stdio: 'inherit',
+  });
+  if (run.status !== 0) {
+    throw new Error(`Installer failed (exit ${String(run.status)})`);
+  }
+}
+
+async function isServerOnline(apiUrl, apiKey, serverId) {
+  try {
+    const data = await apiCall({
+      apiUrl,
+      method: 'GET',
+      endpoint: `/api/servers/${encodeURIComponent(serverId)}/agent-status`,
+      apiKey,
+    });
+    return Boolean(data?.online);
+  } catch {
+    return false;
+  }
+}
+
 async function connectSelfHost(apiUrl, apiKey, name) {
   try {
     const data = await apiCall({
@@ -254,10 +260,25 @@ async function connectSelfHost(apiUrl, apiKey, name) {
       };
     }
     saveSelfHostConfig({ apiUrl, agentId: agentId || serverId, serverId, token });
-    restartSelfHostRuntime();
+    const restarted = restartSelfHostRuntime();
+    let connected = Boolean(data?.server_connected);
+    if (!connected || !restarted) {
+      try {
+        await runSelfHostInstaller(apiUrl, serverId, token, agentId);
+        connected = await isServerOnline(apiUrl, apiKey, serverId);
+      } catch (installerError) {
+        return {
+          status: 'server_reconnect_failed',
+          server_connected: false,
+          server_id: serverId || null,
+          agent_id: agentId || null,
+          error: installerError?.message || 'Failed to install/start self host runtime',
+        };
+      }
+    }
     return {
-      status: String(data?.status || (data?.server_connected ? 'server_connected' : 'server_reconnect_failed')),
-      server_connected: Boolean(data?.server_connected),
+      status: connected ? 'server_connected' : 'server_reconnect_failed',
+      server_connected: connected,
       server_id: serverId || null,
       agent_id: agentId || null,
     };
@@ -347,7 +368,17 @@ async function cmdAuthExchange(args) {
   const agentId = String(data?.agentId || '').trim();
   if (token && serverId) {
     saveSelfHostConfig({ apiUrl, agentId: agentId || serverId, serverId, token });
-    restartSelfHostRuntime();
+    const restarted = restartSelfHostRuntime();
+    if (!Boolean(data?.server_connected) || !restarted) {
+      try {
+        await runSelfHostInstaller(apiUrl, serverId, token, agentId);
+        data.server_connected = await isServerOnline(apiUrl, apiKey, serverId);
+        data.server_status = data.server_connected ? 'server_connected' : 'server_reconnect_failed';
+      } catch {
+        data.server_connected = false;
+        data.server_status = 'server_reconnect_failed';
+      }
+    }
   }
   printJson({
     status: data?.status || 'auth_valid',
