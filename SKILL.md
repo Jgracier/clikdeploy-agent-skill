@@ -36,16 +36,18 @@ metadata:
 # Contract
 
 1. Call platform endpoints directly.
-2. Authenticate once, persist local credential, reuse it for later calls.
-3. Connect/provision self-host before deploy.
-4. After auth success, immediately provision/connect self-host.
-5. Prefer callback-driven status and report progress in chat.
+2. Authenticate once, persist local credential, and reuse it for later calls.
+3. Connect or reconnect self-host with `POST /api/agents/provision` before deploy.
+4. After auth success, immediately connect or reconnect self-host.
+5. Deploy using image name only; platform handles runtime details.
+6. Prefer callback-driven status and report progress in chat.
 
 # Base Rules
 
 - Default `api_url`: `https://clikdeploy.com`
 - Transport: JSON requests/responses
 - Auth header: bearer token from local store when available
+- Deploy input: image name only
 - Never print raw secrets in chat
 
 # Local Auth
@@ -76,7 +78,7 @@ Auth:
 - `/api/auth/cli/login`: `email`, `password`
 
 Self-host:
-- `/api/agents/provision`: optional `name` (defaults server-side), `platform`, `arch`, `hostname`
+- `/api/agents/provision`: connect or reconnect self-host; optional `name` (defaults server-side), `platform`, `arch`, `hostname`
 
 Deploy:
 - `/api/apps` (create + deploy)
@@ -99,8 +101,8 @@ Advanced only (when caller needs webhook correlation):
 - email/password signup or login
 - OAuth device flow (`google` or `github`) with `returnUrl=true`, user pastes one-time code
 3. Persist returned credential locally.
-4. Provision self-host.
-5. Deploy by image or by search result.
+4. Connect or reconnect self-host with `POST /api/agents/provision`.
+5. Deploy app with image name (directly or selected from search results).
 6. Return URL + status updates.
 7. On user request, support cleanup actions:
 - delete app via `/api/apps/:id`
@@ -119,6 +121,6 @@ Advanced only (when caller needs webhook correlation):
 
 - `401/403`: re-auth and replace local credential
 - `404`: verify `api_url` or resource id
-- `409`: treat as in-progress/already-exists when safe
+- `409`: for `/api/agents/provision`, treat already-exists/active as successful reconnect
 - `422`: show missing/invalid input
 - `429/5xx`: retry with capped exponential backoff
