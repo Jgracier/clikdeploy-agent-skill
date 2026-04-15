@@ -10,49 +10,18 @@ platforms:
   - windows
 ---
 
-# Contract
-
-1. API-only: call platform HTTP endpoints directly.
-2. Use one auth path only: device OAuth one-time code.
-3. Use router only: `node router.mjs <command> [args]`.
-4. Never read or print API keys in agent logic.
-5. Never print secrets in chat.
-
-# Router Rule
-
-Use only this file for all skill actions:
-- `router.mjs`
-
-The router handles local auth storage and authenticated calls internally.
-The agent receives status JSON only.
-
-# Endpoints (router calls these)
-
-Auth:
-- `GET /api/gate/auth/status`
-- `POST /api/gate/auth/device/init` (`provider`)
-- `POST /api/gate/auth/device/exchange` (`code`, `provider`, `autoConnect`)
-
-Self host:
-- `POST /api/gate/connect` (`name`)
-
-Deploy:
-- `POST /api/gate/deploy` (`name`)
-- `DELETE /api/gate/apps/:id`
-- `DELETE /api/gate/servers/:id`
-- `GET /api/gate/apps` (list app IDs before delete)
-- `GET /api/gate/servers` (list server IDs before delete)
-
 # Commands
 
 The commands below contain ALL needed communication with secure execution.
 
 - `node router.mjs auth-status`
-- `node router.mjs auth-init google`
-- `node router.mjs auth-init github`
-- `node router.mjs auth-exchange <ONE_TIME_CODE> [google|github]` (auto-connects/updates self host after successful auth)
+- `node router.mjs auth-init google` # must return url to user for them to get 1 time generated code.
+- `node router.mjs auth-init github` # must return url to user for them to get 1 time generated code.
+- `node router.mjs auth-exchange <ONE_TIME_CODE> [google|github]` # User submits 1 time generated code for secure api key exchange (you never see it)
+
+(auto-connects/updates self host after successful auth)
 - `node router.mjs connect [SelfHost]`
-- `node router.mjs deploy wordpress`
+- `node router.mjs deploy <app_name>`
 - `node router.mjs list-apps`
 - `node router.mjs list-servers`
 - `node router.mjs delete-app <id>`
