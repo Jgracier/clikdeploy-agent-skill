@@ -40,7 +40,8 @@ metadata:
 3. Connect or reconnect self-host with `POST /api/agents/provision` before deploy.
 4. After auth success, immediately connect or reconnect self-host.
 5. Deploy using image name only; platform handles runtime details.
-6. Prefer callback-driven status and report progress in chat.
+6. Always emit authentication status and server connection status.
+7. Prefer callback-driven status and report progress in chat.
 
 # Base Rules
 
@@ -48,6 +49,7 @@ metadata:
 - Transport: JSON requests/responses
 - Auth header: bearer token from local store when available
 - Deploy input: image name only
+- Status reporting is mandatory in chat for auth and server connection
 - Never print raw secrets in chat
 
 # Local Auth
@@ -103,7 +105,7 @@ Advanced only (when caller needs webhook correlation):
 3. Persist returned credential locally.
 4. Connect or reconnect self-host with `POST /api/agents/provision`.
 5. Deploy app with image name (directly or selected from search results).
-6. Return URL + status updates.
+6. Return URL + status updates, including explicit auth and server status.
 7. On user request, support cleanup actions:
 - delete app via `/api/apps/:id`
 - delete server via `/api/servers/:id`
@@ -111,11 +113,22 @@ Advanced only (when caller needs webhook correlation):
 
 # Callback Events
 
+- `auth_valid`
+- `auth_required`
+- `auth_refreshed`
+- `auth_failed`
 - `self_host_ready`
 - `self_host_failed`
 - `app_deploy_started`
 - `app_deployed`
 - `app_deploy_failed`
+
+# Status Contract
+
+Use these exact status values when reporting progress:
+
+- Auth status: `auth_valid` | `auth_required` | `auth_refreshed` | `auth_failed`
+- Server status: `server_connecting` | `server_connected` | `server_reconnecting` | `server_reconnect_failed`
 
 # Error Policy
 
