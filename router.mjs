@@ -100,6 +100,16 @@ function clearSelfHostConfig() {
   }
 }
 
+function loadSelfHostConfig() {
+  const cfgPath = selfHostConfigPath();
+  try {
+    if (!fs.existsSync(cfgPath)) return null;
+    return JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
 function appendNotification(record) {
   const inbox = notificationInboxPath();
   ensureDir(path.dirname(inbox));
@@ -528,6 +538,75 @@ async function cmdServerConnect(args) {
   });
 }
 
+async function cmdServerStatus() {
+  const auth = loadAuth();
+  if (!auth?.apiKey) {
+    printJson({ status: 'auth_required', is_authenticated: false });
+    process.exitCode = 1;
+    return;
+  }
+
+  const apiUrl = normalizeApiUrl(auth.apiUrl || DEFAULT_API_URL);
+  const local = loadSelfHostConfig();
+  let serverId = String(local?.serverId || '').trim();
+
+  if (!serverId) {
+    const servers = await apiCall({
+      apiUrl,
+      method: 'GET',
+      endpoint: '/api/gate/servers',
+      apiKey: auth.apiKey,
+    });
+    const rows = Array.isArray(servers?.servers) ? servers.servers : [];
+    const selfHost =
+      rows.find((s) => String(s?.connectionType || '').toUpperCase() === 'AGENT') ||
+      rows.find((s) => String(s?.cloudProvider || '').toUpperCase() === 'HOME');
+    serverId = String(selfHost?.id || '').trim();
+  }
+
+  if (!serverId) {
+    printJson({
+      status: 'server_reconnect_failed',
+      server_connected: false,
+      agent_state: 'needs_attention',
+      message: 'Self Host is not configured locally. Run connect self-host.',
+    });
+    return;
+  }
+
+  const [agentStatus, server] = await Promise.all([
+    apiCall({
+      apiUrl,
+      method: 'GET',
+      endpoint: `/api/servers/${encodeURIComponent(serverId)}/agent-status`,
+      apiKey: auth.apiKey,
+    }),
+    apiCall({
+      apiUrl,
+      method: 'GET',
+      endpoint: `/api/servers/${encodeURIComponent(serverId)}`,
+      apiKey: auth.apiKey,
+    }),
+  ]);
+
+  const connected =
+    Boolean(agentStatus?.online) && String(server?.status || '').trim().toUpperCase() === 'CONNECTED';
+
+  printJson({
+    status: connected ? 'server_connected' : 'server_reconnect_failed',
+    server_connected: connected,
+    agent_state: connected ? 'ready' : 'needs_attention',
+    message: connected ? 'Self Host is connected.' : 'Self Host is not connected. Run connect self-host.',
+    ...(connected
+      ? {}
+      : {
+          server_id: serverId,
+          server_status: String(server?.status || ''),
+          online: Boolean(agentStatus?.online),
+        }),
+  });
+}
+
 async function cmdAppDeploy(args) {
   const auth = loadAuth();
   if (!auth?.apiKey) {
@@ -752,12 +831,37 @@ async function cmdListServers() {
     return;
   }
 
-  const servers = await apiCall({
-    apiUrl: auth.apiUrl,
-    method: 'GET',
-    endpoint: '/api/gate/servers',
-    apiKey: auth.apiKey,
-  });
+  let servers;
+  try {
+    servers = await apiCall({
+      apiUrl: auth.apiUrl,
+      method: 'GET',
+      endpoint: '/api/gate/servers',
+      apiKey: auth.apiKey,
+    });
+  } catch {
+    const direct = await apiCall({
+      apiUrl: auth.apiUrl,
+      method: 'GET',
+      endpoint: '/api/servers',
+      apiKey: auth.apiKey,
+      query: { page: 1, pageSize: 100 },
+    });
+    const rows = Array.isArray(direct) ? direct : Array.isArray(direct?.data) ? direct.data : [];
+    servers = {
+      status: 'servers_list',
+      count: rows.length,
+      servers: rows.map((server) => ({
+        id: String(server?.id || ''),
+        name: String(server?.name || ''),
+        status: String(server?.status || ''),
+        cloudProvider: String(server?.cloudProvider || ''),
+        connectionType: String(server?.connectionType || ''),
+        ipAddress: String(server?.ipAddress || ''),
+        healthError: String(server?.healthError || ''),
+      })),
+    };
+  }
 
   printJson({
     status: servers?.status || 'servers_list',
@@ -772,6 +876,7 @@ function printHelp() {
       'auth-status',
       'auth-init google|github',
       'auth-exchange CODE',
+      'server-status',
       'connect [name]',
       'deploy IMAGE_NAME',
       'notifications',
@@ -801,6 +906,9 @@ async function main() {
         break;
       case 'connect':
         await cmdServerConnect(args);
+        break;
+      case 'server-status':
+        await cmdServerStatus();
         break;
       case 'deploy':
         await cmdAppDeploy(args);

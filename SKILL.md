@@ -29,6 +29,9 @@ The commands below contain ALL needed communication with secure execution.
   - On error: diagnose and try again only 2 times before informing user the problem.
 
 (auto-connects/updates connection after auth)
+- `node router.mjs server-status`
+  - Non-mutating status check.
+  - Use this to verify whether Self Host is connected.
 - `node router.mjs connect [SelfHost]`
   - On success: `All set, what apps would you like to deploy?`
   - On failure: `Reconnect failed, want me to try again?`
@@ -61,6 +64,10 @@ Only include specific technical details when auth or server connection failed.
 Use `agent_state` for behavior:
 - `ready`: proceed and ask what app to deploy
 - `needs_attention`: show the error and next step
+
+Status check rule:
+- Do not call `connect` to check status.
+- Call `server-status` for read-only verification.
 
 Deploy completion behavior:
 - `deploy` is non-blocking and returns immediately after deployment is accepted.
