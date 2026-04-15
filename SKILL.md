@@ -25,16 +25,20 @@ The commands below contain ALL needed communication with secure execution.
   - Example wordage: `Open this login URL to continue: <auth_url>. After consent, paste the one-time code here.`
 
 - `node router.mjs auth-exchange <ONE_TIME_CODE>` # User submits 1 time generated code for secure api key exchange
-  - On success with server connected: `Authentication complete. Self host connected. What app would you like to deploy?`
+  - On success with server connected: `All set, what apps would you like to deploy?`
   - On error: diagnose and try again only 2 times before informing user the problem.
 
 (auto-connects/updates connection after auth)
 - `node router.mjs connect [SelfHost]`
-  - On success: `Connection is up and healthy. What app would you like to deploy?`
+  - On success: `All set, what apps would you like to deploy?`
   - On failure: `Reconnect failed, want me to try again?`
 - `node router.mjs deploy <app_name>`
-  - On success: `Deployment started successfully for <app_name>.`
+  - On success: `Deploy started for <app_name>. This may take a few minutes. I will notify you when it is completed.`
   - On failure: `Deployment failed: <error>.`
+- `node router.mjs notifications`
+  - Optional debug view of local notification records (latest 20).
+- `node router.mjs notifications-clear`
+  - Optional cleanup for local notification records.
 - `node router.mjs list-apps`
 - `node router.mjs list-servers`
 - `node router.mjs delete-app <id>`
@@ -47,11 +51,25 @@ The commands below contain ALL needed communication with secure execution.
 - Defaults are platform-owned:
   - `autoConnect: true`
   - `waitForHealthy: true`
-  - self host name defaults to `<hostname> (Self Host)` when name is omitted
+  - self host name defaults to `Self Host` when name is omitted
 
 # Status Output
 
-Return only:
+Return structured status plus a user-facing `message`.
+On successful auth/connect callbacks, prioritize the `message` and do not restate IDs or raw statuses in chat.
+Only include specific technical details when auth or server connection failed.
+Use `agent_state` for behavior:
+- `ready`: proceed and ask what app to deploy
+- `needs_attention`: show the error and next step
+
+Deploy completion behavior:
+- `deploy` is non-blocking and returns immediately after deployment is accepted.
+- Router starts an internal event-driven watcher using `/api/deployments/:id/wait?wait=1`.
+- On completion, router automatically sends a deterministic completion message through the local messaging/notification method:
+  - Example success: `n8n deployed successfully, here is the url to begin using it: <url>`
+- Agent polling is not required for user notification.
+
+Status values:
 - `auth_required` | `auth_valid` | `auth_failed`
 - `server_connected` | `server_reconnect_failed`
 - `app_deploy_started` | `app_deploy_failed`

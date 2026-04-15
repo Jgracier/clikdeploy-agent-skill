@@ -2,7 +2,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { spawnSync } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 
 const DEFAULT_API_URL = 'https://clikdeploy.com';
 
@@ -22,6 +22,10 @@ function authPaths() {
 
 function selfHostConfigPath() {
   return path.join(os.homedir(), '.clikdeploy', 'self-host.json');
+}
+
+function notificationInboxPath() {
+  return path.join(os.homedir(), '.clikdeploy', 'skill-notifications.jsonl');
 }
 
 function ensureDir(dir) {
@@ -94,6 +98,16 @@ function clearSelfHostConfig() {
   } catch {
     // ignore local cleanup errors
   }
+}
+
+function appendNotification(record) {
+  const inbox = notificationInboxPath();
+  ensureDir(path.dirname(inbox));
+  const payload = {
+    at: new Date().toISOString(),
+    ...record,
+  };
+  fs.appendFileSync(inbox, `${JSON.stringify(payload)}\n`, { mode: 0o600 });
 }
 
 function tryRun(cmd, args) {
@@ -200,6 +214,25 @@ function printJson(obj) {
   process.stdout.write(`${JSON.stringify(obj)}\n`);
 }
 
+function sendDesktopNotification(title, message) {
+  const safeTitle = String(title || 'ClikDeploy').trim() || 'ClikDeploy';
+  const safeMessage = String(message || '').trim();
+  if (!safeMessage) return;
+
+  if (process.platform === 'linux') {
+    tryRun('notify-send', [safeTitle, safeMessage]);
+    return;
+  }
+  if (process.platform === 'darwin') {
+    const escapedTitle = safeTitle.replace(/"/g, '\\"');
+    const escapedMessage = safeMessage.replace(/"/g, '\\"');
+    tryRun('osascript', [
+      '-e',
+      `display notification "${escapedMessage}" with title "${escapedTitle}"`,
+    ]);
+  }
+}
+
 async function runSelfHostInstaller(apiUrl, serverId, agentToken, agentId) {
   const baseUrl = normalizeApiUrl(apiUrl);
   const installUrl = `${baseUrl}/install.sh`;
@@ -238,6 +271,16 @@ async function isServerOnline(apiUrl, apiKey, serverId) {
   }
 }
 
+async function waitForServerOnline(apiUrl, apiKey, serverId, timeoutMs = 120000, pollMs = 3000) {
+  const start = Date.now();
+  while (Date.now() - start <= timeoutMs) {
+    const online = await isServerOnline(apiUrl, apiKey, serverId);
+    if (online) return true;
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+  return false;
+}
+
 async function connectSelfHost(apiUrl, apiKey, name) {
   try {
     const data = await apiCall({
@@ -262,7 +305,13 @@ async function connectSelfHost(apiUrl, apiKey, name) {
     saveSelfHostConfig({ apiUrl, agentId: agentId || serverId, serverId, token });
     const restarted = restartSelfHostRuntime();
     let connected = Boolean(data?.server_connected);
-    if (!connected || !restarted) {
+    const serverConnectionState = String(data?.server_connection_state || '').trim().toUpperCase();
+    const shouldRecover =
+      !restarted ||
+      serverConnectionState === 'DISCONNECTED' ||
+      serverConnectionState === 'ERROR' ||
+      (!connected && !serverConnectionState);
+    if (shouldRecover) {
       try {
         await runSelfHostInstaller(apiUrl, serverId, token, agentId);
         connected = await isServerOnline(apiUrl, apiKey, serverId);
@@ -275,6 +324,9 @@ async function connectSelfHost(apiUrl, apiKey, name) {
           error: installerError?.message || 'Failed to install/start self host runtime',
         };
       }
+    }
+    if (!connected && serverConnectionState === 'CONNECTING' && serverId) {
+      connected = await waitForServerOnline(apiUrl, apiKey, serverId);
     }
     return {
       status: connected ? 'server_connected' : 'server_reconnect_failed',
@@ -289,6 +341,47 @@ async function connectSelfHost(apiUrl, apiKey, name) {
       error: error?.message || 'Failed to connect self host agent',
     };
   }
+}
+
+async function waitForDeploymentTerminal(apiUrl, apiKey, deploymentId, timeoutMs = 590000) {
+  const data = await apiCall({
+    apiUrl,
+    method: 'GET',
+    endpoint: `/api/deployments/${encodeURIComponent(deploymentId)}/wait`,
+    apiKey,
+    query: { wait: 1, timeoutMs },
+  });
+  return data?.deployment || null;
+}
+
+async function resolveAppOpenUrl(apiUrl, apiKey, appId) {
+  if (!appId) return null;
+  try {
+    const data = await apiCall({
+      apiUrl,
+      method: 'GET',
+      endpoint: `/api/apps/${encodeURIComponent(appId)}/open-url`,
+      apiKey,
+      query: { json: 1 },
+    });
+    const url = String(data?.url || '').trim();
+    return url || null;
+  } catch {
+    return null;
+  }
+}
+
+function startDetachedDeployNotifier(deploymentId, appName, apiUrl) {
+  if (!deploymentId) return;
+  const routerPath = path.resolve(process.argv[1] || 'router.mjs');
+  const args = [routerPath, 'deploy-notify', deploymentId];
+  if (appName) args.push('--app', appName);
+  if (apiUrl) args.push('--api-url', apiUrl);
+  const child = spawn(process.execPath, args, {
+    detached: true,
+    stdio: 'ignore',
+  });
+  child.unref();
 }
 
 async function cmdAuthStatus() {
@@ -366,10 +459,16 @@ async function cmdAuthExchange(args) {
   const token = String(data?.agentToken || '').trim();
   const serverId = String(data?.serverId || '').trim();
   const agentId = String(data?.agentId || '').trim();
+  const serverConnectionState = String(data?.server_connection_state || '').trim().toUpperCase();
   if (token && serverId) {
     saveSelfHostConfig({ apiUrl, agentId: agentId || serverId, serverId, token });
     const restarted = restartSelfHostRuntime();
-    if (!Boolean(data?.server_connected) || !restarted) {
+    const shouldRecover =
+      !restarted ||
+      serverConnectionState === 'DISCONNECTED' ||
+      serverConnectionState === 'ERROR' ||
+      (!Boolean(data?.server_connected) && !serverConnectionState);
+    if (shouldRecover) {
       try {
         await runSelfHostInstaller(apiUrl, serverId, token, agentId);
         data.server_connected = await isServerOnline(apiUrl, apiKey, serverId);
@@ -378,6 +477,9 @@ async function cmdAuthExchange(args) {
         data.server_connected = false;
         data.server_status = 'server_reconnect_failed';
       }
+    } else if (!Boolean(data?.server_connected) && serverConnectionState === 'CONNECTING') {
+      data.server_connected = await waitForServerOnline(apiUrl, apiKey, serverId);
+      data.server_status = data.server_connected ? 'server_connected' : 'server_reconnect_failed';
     }
   }
   printJson({
@@ -386,8 +488,16 @@ async function cmdAuthExchange(args) {
     is_authenticated: true,
     server_status: String(data?.server_status || ''),
     server_connected: Boolean(data?.server_connected),
-    server_id: serverId || null,
-    agent_id: agentId || null,
+    agent_state: Boolean(data?.server_connected) ? 'ready' : 'needs_attention',
+    message: Boolean(data?.server_connected)
+      ? 'All set. What app should I deploy?'
+      : 'Signed in, but Self Host connect failed. Run connect self-host.',
+    ...(Boolean(data?.server_connected)
+      ? {}
+      : {
+          server_id: serverId || null,
+          agent_id: agentId || null,
+        }),
   });
 }
 
@@ -404,8 +514,16 @@ async function cmdServerConnect(args) {
   printJson({
     status: result.status,
     server_connected: result.server_connected,
-    server_id: result.server_id || null,
-    agent_id: result.agent_id || null,
+    agent_state: result.status === 'server_connected' ? 'ready' : 'needs_attention',
+    message: result.status === 'server_connected'
+      ? 'All set. What app should I deploy?'
+      : 'Self Host connection failed. Try reconnect.',
+    ...(result.status === 'server_connected'
+      ? {}
+      : {
+          server_id: result.server_id || null,
+          agent_id: result.agent_id || null,
+        }),
     ...(result.error ? { error: result.error } : {}),
   });
 }
@@ -434,14 +552,122 @@ async function cmdAppDeploy(args) {
       name: inputName,
     },
   });
+  const status = String(deployed?.status || 'app_deploy_started').trim();
+  const deploymentId = String(deployed?.deploymentId || '').trim();
+  if (status === 'app_deploy_started' && deploymentId) {
+    startDetachedDeployNotifier(deploymentId, inputName, auth.apiUrl);
+  }
 
   printJson({
-    status: deployed?.status || 'app_deploy_started',
-    app_id: deployed?.appId || null,
-    deployment_id: deployed?.deploymentId || null,
-    image: deployed?.image || null,
-    server_id: deployed?.serverId || null,
+    status,
+    agent_state: status === 'app_deploy_started' ? 'ready' : 'needs_attention',
+    message:
+      status === 'app_deploy_started'
+        ? inputName
+          ? `Deploy started for ${inputName}. This may take a few minutes. I will notify you when it is completed.`
+          : 'Deploy started. This may take a few minutes. I will notify you when it is completed.'
+        : 'Deploy request failed.',
+    ...(status === 'app_deploy_started'
+      ? {}
+      : {
+          app_id: deployed?.appId || null,
+          deployment_id: deployed?.deploymentId || null,
+          image: deployed?.image || null,
+          server_id: deployed?.serverId || null,
+        }),
   });
+}
+
+async function cmdDeployNotify(args) {
+  const deploymentId = String(args._[1] || '').trim();
+  if (!deploymentId) {
+    process.exitCode = 1;
+    return;
+  }
+  const appName = String(args.app || '').trim() || 'App';
+  const auth = loadAuth();
+  if (!auth?.apiKey) {
+    appendNotification({
+      type: 'deploy',
+      deployment_id: deploymentId,
+      status: 'FAILED',
+      message: `${appName} deployment status could not be checked (not authenticated).`,
+    });
+    return;
+  }
+
+  const apiUrl = normalizeApiUrl(args['api-url'] || auth.apiUrl || DEFAULT_API_URL);
+  let finalStatus = 'UNKNOWN';
+  let finalMessage = `${appName} deployment status could not be confirmed.`;
+  let appUrl = null;
+
+  try {
+    const deployment = await waitForDeploymentTerminal(apiUrl, auth.apiKey, deploymentId);
+    finalStatus = String(deployment?.status || 'UNKNOWN').trim().toUpperCase();
+    const appId = String(deployment?.appId || '').trim();
+    if (finalStatus === 'SUCCESS') {
+      appUrl = await resolveAppOpenUrl(apiUrl, auth.apiKey, appId);
+      finalMessage = appUrl
+        ? `${appName} deployed successfully, here is the url to begin using it: ${appUrl}`
+        : `${appName} deployed successfully.`;
+    } else if (finalStatus === 'FAILED') {
+      finalMessage = `${appName} deployment failed. Open ClikDeploy to review logs.`;
+    } else if (finalStatus === 'CANCELLED') {
+      finalMessage = `${appName} deployment was cancelled.`;
+    } else {
+      finalMessage = `${appName} deployment status: ${finalStatus.toLowerCase()}.`;
+    }
+  } catch {
+    finalStatus = 'FAILED';
+    finalMessage = `${appName} deployment status check failed.`;
+  }
+
+  appendNotification({
+    type: 'deploy',
+    deployment_id: deploymentId,
+    status: finalStatus,
+    message: finalMessage,
+    ...(appUrl ? { url: appUrl } : {}),
+  });
+  sendDesktopNotification('ClikDeploy', finalMessage);
+}
+
+async function cmdNotifications() {
+  const inbox = notificationInboxPath();
+  if (!fs.existsSync(inbox)) {
+    printJson({ status: 'notifications', count: 0, notifications: [] });
+    return;
+  }
+  const raw = fs.readFileSync(inbox, 'utf8');
+  const lines = raw
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const notifications = lines
+    .slice(-20)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+  printJson({
+    status: 'notifications',
+    count: notifications.length,
+    notifications,
+  });
+}
+
+async function cmdNotificationsClear() {
+  const inbox = notificationInboxPath();
+  try {
+    if (fs.existsSync(inbox)) fs.unlinkSync(inbox);
+  } catch {
+    // ignore local cleanup errors
+  }
+  printJson({ status: 'notifications_cleared' });
 }
 
 async function cmdAppDelete(args) {
@@ -548,6 +774,8 @@ function printHelp() {
       'auth-exchange CODE',
       'connect [name]',
       'deploy IMAGE_NAME',
+      'notifications',
+      'notifications-clear',
       'list-apps',
       'list-servers',
       'delete-app APP_ID',
@@ -576,6 +804,15 @@ async function main() {
         break;
       case 'deploy':
         await cmdAppDeploy(args);
+        break;
+      case 'deploy-notify':
+        await cmdDeployNotify(args);
+        break;
+      case 'notifications':
+        await cmdNotifications();
+        break;
+      case 'notifications-clear':
+        await cmdNotificationsClear();
         break;
       case 'list-apps':
         await cmdListApps();
