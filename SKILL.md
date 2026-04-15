@@ -99,6 +99,41 @@ Search:
 Advanced only (when caller needs webhook correlation):
 - `callbackUrl`, `callbackToken`, `requestId`
 
+# Endpoint Expectations (Verified)
+
+Verified against `https://clikdeploy.com` on 2026-04-14 (America/Denver) / 2026-04-15 (UTC).
+
+Auth endpoints:
+- `POST /api/auth/cli/device/init`
+  - requires `provider` = `google|github`
+  - with `returnUrl=true`, returns `flowId`, `authUrl`, `consentUrl`, `expiresInSec`
+  - invalid provider -> `400` with provider validation error
+- `POST /api/auth/cli/device/exchange`
+  - requires `code`
+  - missing or invalid code format -> `400`
+- `POST /api/auth/cli/signup`
+  - requires `email`, `password` (optional `name`)
+  - validation errors -> `400`
+  - may return `429` with `retry-after` under rate limit
+- `POST /api/auth/cli/login`
+  - requires valid email format and password
+  - invalid email format -> `400`
+  - bad credentials -> `401` (`AUTH_REQUIRED`)
+
+Search endpoint:
+- `GET /api/docker-hub/search?q=<term>`
+  - missing `q` -> `400` (`VALIDATION_ERROR`)
+  - valid query (example: `q=n8n`) -> `200` with `data.images[]`
+
+Protected endpoints (bearer token required):
+- `POST /api/agents/provision`
+- `POST /api/apps`
+- `POST /api/apps/:id/deploy`
+- `DELETE /api/apps/:id`
+- `DELETE /api/servers/:id`
+- missing bearer token -> `401` auth required
+- invalid bearer token format -> `401` (`AUTH_REQUIRED`)
+
 # Flow
 
 1. Load local auth.
