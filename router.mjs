@@ -17,7 +17,6 @@ function authPaths() {
   return {
     authJsonPath: path.join(resolveConfigHome(), 'clikdeploy', 'auth.json'),
     apiKeyPath: path.join(os.homedir(), '.clikdeploy', 'api-key'),
-    pendingProviderPath: path.join(os.homedir(), '.clikdeploy', 'pending-provider'),
   };
 }
 
@@ -74,33 +73,6 @@ function saveAuth({ apiUrl, apiKey, authMethod = 'unknown' }) {
   };
   fs.writeFileSync(authJsonPath, JSON.stringify(payload, null, 2), { mode: 0o600 });
   fs.writeFileSync(apiKeyPath, apiKey, { mode: 0o600 });
-}
-
-function savePendingProvider(provider) {
-  const { pendingProviderPath } = authPaths();
-  ensureDir(path.dirname(pendingProviderPath));
-  fs.writeFileSync(pendingProviderPath, String(provider || '').trim().toLowerCase(), { mode: 0o600 });
-}
-
-function loadPendingProvider() {
-  const { pendingProviderPath } = authPaths();
-  try {
-    if (!fs.existsSync(pendingProviderPath)) return '';
-    const value = fs.readFileSync(pendingProviderPath, 'utf8').trim().toLowerCase();
-    if (value === 'google' || value === 'github') return value;
-  } catch {
-    // ignore
-  }
-  return '';
-}
-
-function clearPendingProvider() {
-  const { pendingProviderPath } = authPaths();
-  try {
-    if (fs.existsSync(pendingProviderPath)) fs.unlinkSync(pendingProviderPath);
-  } catch {
-    // ignore
-  }
 }
 
 function saveSelfHostConfig({ apiUrl, agentId, serverId, token }) {
@@ -228,30 +200,6 @@ function printJson(obj) {
   process.stdout.write(`${JSON.stringify(obj)}\n`);
 }
 
-async function waitForAgentOnlineByCallback(apiUrl, agentToken) {
-  const token = String(agentToken || '').trim();
-  if (!token) return { confirmed: false, online: false, serverStatus: 'CONNECTING' };
-  try {
-    const url = `${normalizeApiUrl(apiUrl)}/api/agents/install-report?wait=1`;
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    const json = await res.json().catch(() => ({}));
-    const data = json && typeof json === 'object' && 'data' in json ? json.data : json;
-    if (!res.ok) return { confirmed: false, online: false, serverStatus: 'CONNECTING' };
-    return {
-      online: Boolean(data?.online),
-      confirmed: Boolean(data?.confirmed),
-      serverStatus: String(data?.serverStatus || 'CONNECTING'),
-    };
-  } catch {
-    return { confirmed: false, online: false, serverStatus: 'CONNECTING' };
-  }
-}
-
 async function connectSelfHost(apiUrl, apiKey, name) {
   try {
     const data = await apiCall({
@@ -275,19 +223,9 @@ async function connectSelfHost(apiUrl, apiKey, name) {
     }
     saveSelfHostConfig({ apiUrl, agentId: agentId || serverId, serverId, token });
     restartSelfHostRuntime();
-    const waited = await waitForAgentOnlineByCallback(apiUrl, token);
-    if (!waited.confirmed || !waited.online) {
-      return {
-        status: 'server_reconnect_failed',
-        server_connected: false,
-        server_id: serverId || null,
-        agent_id: agentId || null,
-        error: 'Timed out waiting for self host callback confirmation',
-      };
-    }
     return {
-      status: 'server_connected',
-      server_connected: true,
+      status: String(data?.status || (data?.server_connected ? 'server_connected' : 'server_reconnect_failed')),
+      server_connected: Boolean(data?.server_connected),
       server_id: serverId || null,
       agent_id: agentId || null,
     };
@@ -338,7 +276,6 @@ async function cmdAuthInit(args) {
     is_authenticated: false,
     auth_url: data?.authUrl || data?.auth_url || '',
   });
-  savePendingProvider(provider);
 }
 
 async function cmdAuthExchange(args) {
@@ -350,12 +287,6 @@ async function cmdAuthExchange(args) {
   }
 
   const apiUrl = normalizeApiUrl(args['api-url'] || DEFAULT_API_URL);
-  const providerArg = String(args.provider || args._[2] || '').trim().toLowerCase();
-  const inferredProvider = loadPendingProvider();
-  const provider =
-    providerArg === 'google' || providerArg === 'github'
-      ? providerArg
-      : inferredProvider || 'unknown';
   const data = await apiCall({
     apiUrl,
     method: 'POST',
@@ -377,22 +308,18 @@ async function cmdAuthExchange(args) {
   saveAuth({
     apiUrl,
     apiKey,
-    authMethod: provider === 'google' || provider === 'github' ? provider : 'unknown',
+    authMethod: String(data?.auth_method || 'unknown').trim().toLowerCase() || 'unknown',
   });
-  clearPendingProvider();
   const token = String(data?.agentToken || '').trim();
   const serverId = String(data?.serverId || '').trim();
   const agentId = String(data?.agentId || '').trim();
   if (token && serverId) {
     saveSelfHostConfig({ apiUrl, agentId: agentId || serverId, serverId, token });
     restartSelfHostRuntime();
-    const waited = await waitForAgentOnlineByCallback(apiUrl, token);
-    data.server_connected = Boolean(waited.confirmed && waited.online);
-    data.server_status = waited.confirmed && waited.online ? 'server_connected' : 'server_reconnect_failed';
   }
   printJson({
     status: data?.status || 'auth_valid',
-    auth_method: provider === 'google' || provider === 'github' ? provider : 'unknown',
+    auth_method: String(data?.auth_method || 'unknown').trim().toLowerCase() || 'unknown',
     is_authenticated: true,
     server_status: String(data?.server_status || ''),
     server_connected: Boolean(data?.server_connected),
