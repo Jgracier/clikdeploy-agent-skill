@@ -39,7 +39,7 @@ metadata:
 2. Authenticate with platform auth endpoints only, persist local credential, and reuse it for later calls.
 3. Connect or reconnect self-host with `POST /api/agents/provision` before deploy.
 4. After auth success, immediately connect or reconnect self-host.
-5. Deploy using image name only; platform handles runtime details.
+5. Resolve app image from Docker Hub search on every deploy, then deploy using the resolved image name only.
 6. Always emit authentication status and server connection status.
 7. Prefer callback-driven status and report progress in chat.
 
@@ -49,7 +49,7 @@ metadata:
 - Transport: JSON requests/responses
 - Auth header: bearer token from local store when available
 - Auth methods allowed: `signup`, `login`, `device_flow` (OAuth via `google` or `github`)
-- Deploy input: image name only
+- Deploy input: image name only, resolved from `/api/docker-hub/search` every time
 - Status reporting is mandatory in chat for auth and server connection
 - Never print raw secrets in chat
 
@@ -108,7 +108,7 @@ Advanced only (when caller needs webhook correlation):
 - `device_flow` via `/api/auth/cli/device/init` + `/api/auth/cli/device/exchange`
 3. Persist returned credential locally (`auth.json`, and `api-key` compatibility file when available).
 4. Connect or reconnect self-host with `POST /api/agents/provision`.
-5. Deploy app with image name (directly or selected from search results).
+5. Always resolve app name through `/api/docker-hub/search`, then deploy with the resolved image name.
 6. Return URL + status updates, including explicit auth and server status.
 7. On user request, support cleanup actions:
 - delete app via `/api/apps/:id`
