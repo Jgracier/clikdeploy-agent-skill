@@ -35,8 +35,8 @@ metadata:
 
 # Contract
 
-1. Call platform endpoints directly.
-2. Authenticate once, persist local credential, and reuse it for later calls.
+1. API-only skill: call platform HTTP endpoints directly; do not invoke CLI commands.
+2. Authenticate with platform auth endpoints only, persist local credential, and reuse it for later calls.
 3. Connect or reconnect self-host with `POST /api/agents/provision` before deploy.
 4. After auth success, immediately connect or reconnect self-host.
 5. Deploy using image name only; platform handles runtime details.
@@ -48,17 +48,19 @@ metadata:
 - Default `api_url`: `https://clikdeploy.com`
 - Transport: JSON requests/responses
 - Auth header: bearer token from local store when available
+- Auth methods allowed: `signup`, `login`, `device_flow` (OAuth via `google` or `github`)
 - Deploy input: image name only
 - Status reporting is mandatory in chat for auth and server connection
 - Never print raw secrets in chat
 
 # Local Auth
 
-Store after successful auth (`signup`, `login`, or `device/exchange`).
+Store after successful platform auth (`signup`, `login`, or `device/exchange`).
 
 - Linux/macOS: `${XDG_CONFIG_HOME:-~/.config}/clikdeploy/auth.json`
 - Windows: `${APPDATA}/ClikDeploy/auth.json`
 - Fallback: `~/.clikdeploy/auth.json`
+- Optional compatibility token file: `~/.clikdeploy/api-key`
 
 Minimum fields:
 - `apiUrl`
@@ -69,7 +71,8 @@ Lookup precedence:
 1. explicit runtime secret/arg
 2. env override
 3. local auth file
-4. prompt re-auth
+4. local api-key compatibility file
+5. prompt re-auth
 
 # Endpoints
 
@@ -99,10 +102,11 @@ Advanced only (when caller needs webhook correlation):
 # Flow
 
 1. Load local auth.
-2. If missing/invalid, offer auth options:
-- email/password signup or login
-- OAuth device flow (`google` or `github`) with `returnUrl=true`, user pastes one-time code
-3. Persist returned credential locally.
+2. If missing/invalid, authenticate with one of exactly three platform methods:
+- `signup` via `/api/auth/cli/signup`
+- `login` via `/api/auth/cli/login`
+- `device_flow` via `/api/auth/cli/device/init` + `/api/auth/cli/device/exchange`
+3. Persist returned credential locally (`auth.json`, and `api-key` compatibility file when available).
 4. Connect or reconnect self-host with `POST /api/agents/provision`.
 5. Deploy app with image name (directly or selected from search results).
 6. Return URL + status updates, including explicit auth and server status.
