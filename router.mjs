@@ -299,6 +299,7 @@ async function connectSelfHost(apiUrl, apiKey, name) {
       endpoint: '/api/gate/connect',
       apiKey,
       body: {
+        waitForHealthy: false,
         ...(name ? { name: String(name).trim() } : {}),
       },
     });
@@ -450,6 +451,7 @@ async function cmdAuthExchange(args) {
     body: {
       code,
       autoConnect: true,
+      waitForHealthy: false,
       ...(args.name || args._[3] ? { name: String(args.name || args._[3]).trim() } : {}),
     },
   });
