@@ -2,6 +2,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { spawnSync } from 'child_process';
 
 const DEFAULT_API_URL = 'https://clikdeploy.com';
 
@@ -86,6 +87,50 @@ function saveSelfHostConfig({ apiUrl, agentId, serverId, token }) {
   fs.writeFileSync(cfgPath, JSON.stringify(payload, null, 2), { mode: 0o600 });
 }
 
+function clearSelfHostConfig() {
+  const cfgPath = selfHostConfigPath();
+  try {
+    if (fs.existsSync(cfgPath)) fs.unlinkSync(cfgPath);
+  } catch {
+    // ignore local cleanup errors
+  }
+}
+
+function tryRun(cmd, args) {
+  try {
+    const result = spawnSync(cmd, args, { stdio: 'ignore' });
+    return result.status === 0;
+  } catch {
+    return false;
+  }
+}
+
+function restartSelfHostRuntime() {
+  if (process.platform === 'linux') {
+    const ok = tryRun('systemctl', ['--user', 'restart', 'clikdeploy-self-host.service']);
+    if (ok) return true;
+    return tryRun('systemctl', ['--user', 'start', 'clikdeploy-self-host.service']);
+  }
+  if (process.platform === 'darwin') {
+    const uid = String(process.getuid ? process.getuid() : '').trim();
+    if (!uid) return false;
+    return tryRun('launchctl', ['kickstart', '-k', `gui/${uid}/com.clikdeploy.self-host`]);
+  }
+  return false;
+}
+
+function stopSelfHostRuntime() {
+  if (process.platform === 'linux') {
+    return tryRun('systemctl', ['--user', 'stop', 'clikdeploy-self-host.service']);
+  }
+  if (process.platform === 'darwin') {
+    const uid = String(process.getuid ? process.getuid() : '').trim();
+    if (!uid) return false;
+    return tryRun('launchctl', ['bootout', `gui/${uid}/com.clikdeploy.self-host`]);
+  }
+  return false;
+}
+
 function normalizeApiUrl(apiUrl) {
   return String(apiUrl || DEFAULT_API_URL).replace(/\/+$/, '');
 }
@@ -160,7 +205,7 @@ async function connectSelfHost(apiUrl, apiKey, name) {
     const data = await apiCall({
       apiUrl,
       method: 'POST',
-      endpoint: '/api/control-plane/connect',
+      endpoint: '/api/gate/connect',
       apiKey,
       body: {
         ...(name ? { name: String(name).trim() } : {}),
@@ -171,6 +216,7 @@ async function connectSelfHost(apiUrl, apiKey, name) {
     const agentId = String(data?.agentId || '').trim();
     if (token && serverId) {
       saveSelfHostConfig({ apiUrl, agentId: agentId || serverId, serverId, token });
+      restartSelfHostRuntime();
     }
     return {
       status: 'server_connected',
@@ -182,7 +228,7 @@ async function connectSelfHost(apiUrl, apiKey, name) {
     return {
       status: 'server_reconnect_failed',
       server_connected: false,
-      error: error?.message || 'Failed to connect self-host agent',
+      error: error?.message || 'Failed to connect self host agent',
     };
   }
 }
@@ -192,7 +238,7 @@ async function cmdAuthStatus() {
   const data = await apiCall({
     apiUrl: auth?.apiUrl || DEFAULT_API_URL,
     method: 'GET',
-    endpoint: '/api/control-plane/auth/status',
+    endpoint: '/api/gate/auth/status',
     apiKey: auth?.apiKey,
   });
   printJson({
@@ -213,7 +259,7 @@ async function cmdAuthInit(args) {
   const data = await apiCall({
     apiUrl: args['api-url'] || DEFAULT_API_URL,
     method: 'POST',
-    endpoint: '/api/control-plane/auth/device/init',
+    endpoint: '/api/gate/auth/device/init',
     body: {
       provider,
     },
@@ -240,7 +286,7 @@ async function cmdAuthExchange(args) {
   const data = await apiCall({
     apiUrl,
     method: 'POST',
-    endpoint: '/api/control-plane/auth/device/exchange',
+    endpoint: '/api/gate/auth/device/exchange',
     body: {
       code,
       ...(provider === 'google' || provider === 'github' ? { provider } : {}),
@@ -315,7 +361,7 @@ async function cmdAppDeploy(args) {
   const deployed = await apiCall({
     apiUrl: auth.apiUrl,
     method: 'POST',
-    endpoint: '/api/control-plane/deploy',
+    endpoint: '/api/gate/deploy',
     apiKey: auth.apiKey,
     body: {
       name: inputName,
@@ -349,7 +395,7 @@ async function cmdAppDelete(args) {
   await apiCall({
     apiUrl: auth.apiUrl,
     method: 'DELETE',
-    endpoint: `/api/control-plane/apps/${encodeURIComponent(appId)}`,
+    endpoint: `/api/gate/apps/${encodeURIComponent(appId)}`,
     apiKey: auth.apiKey,
   });
 
@@ -367,7 +413,7 @@ async function cmdListApps() {
   const apps = await apiCall({
     apiUrl: auth.apiUrl,
     method: 'GET',
-    endpoint: '/api/control-plane/apps',
+    endpoint: '/api/gate/apps',
     apiKey: auth.apiKey,
   });
 
@@ -396,9 +442,11 @@ async function cmdServerDelete(args) {
   await apiCall({
     apiUrl: auth.apiUrl,
     method: 'DELETE',
-    endpoint: `/api/control-plane/servers/${encodeURIComponent(serverId)}`,
+    endpoint: `/api/gate/servers/${encodeURIComponent(serverId)}`,
     apiKey: auth.apiKey,
   });
+  stopSelfHostRuntime();
+  clearSelfHostConfig();
 
   printJson({ status: 'server_deleted', server_id: serverId });
 }
@@ -414,7 +462,7 @@ async function cmdListServers() {
   const servers = await apiCall({
     apiUrl: auth.apiUrl,
     method: 'GET',
-    endpoint: '/api/control-plane/servers',
+    endpoint: '/api/gate/servers',
     apiKey: auth.apiKey,
   });
 

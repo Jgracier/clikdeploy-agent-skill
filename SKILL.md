@@ -1,6 +1,6 @@
 ---
 name: clikdeploy_deploy_skill
-description: Minimal API contract for one-time-code auth, self-host connect, and app deploy.
+description: Minimal API contract for one-time-code auth, self host connect, and app deploy.
 version: 0.5.0
 author: ClikDeploy
 license: MIT
@@ -29,19 +29,19 @@ The agent receives status JSON only.
 # Endpoints (router calls these)
 
 Auth:
-- `GET /api/control-plane/auth/status`
-- `POST /api/control-plane/auth/device/init` (`provider`)
-- `POST /api/control-plane/auth/device/exchange` (`code`, `provider`, `autoConnect`)
+- `GET /api/gate/auth/status`
+- `POST /api/gate/auth/device/init` (`provider`)
+- `POST /api/gate/auth/device/exchange` (`code`, `provider`, `autoConnect`)
 
-Self-host:
-- `POST /api/control-plane/connect` (`name`)
+Self host:
+- `POST /api/gate/connect` (`name`)
 
 Deploy:
-- `POST /api/control-plane/deploy` (`name`)
-- `DELETE /api/control-plane/apps/:id`
-- `DELETE /api/control-plane/servers/:id`
-- `GET /api/control-plane/apps` (list app IDs before delete)
-- `GET /api/control-plane/servers` (list server IDs before delete)
+- `POST /api/gate/deploy` (`name`)
+- `DELETE /api/gate/apps/:id`
+- `DELETE /api/gate/servers/:id`
+- `GET /api/gate/apps` (list app IDs before delete)
+- `GET /api/gate/servers` (list server IDs before delete)
 
 # Commands
 
@@ -50,8 +50,8 @@ The commands below contain ALL needed communication with secure execution.
 - `node router.mjs auth-status`
 - `node router.mjs auth-init google`
 - `node router.mjs auth-init github`
-- `node router.mjs auth-exchange <ONE_TIME_CODE> [google|github]` (auto-connects/updates self-host after successful auth)
-- `node router.mjs connect [Home]`
+- `node router.mjs auth-exchange <ONE_TIME_CODE> [google|github]` (auto-connects/updates self host after successful auth)
+- `node router.mjs connect [SelfHost]`
 - `node router.mjs deploy wordpress`
 - `node router.mjs list-apps`
 - `node router.mjs list-servers`
