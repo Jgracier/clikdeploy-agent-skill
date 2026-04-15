@@ -130,6 +130,11 @@ Use these exact status values when reporting progress:
 - Auth status: `auth_valid` | `auth_required` | `auth_refreshed` | `auth_failed`
 - Server status: `server_connecting` | `server_connected` | `server_reconnecting` | `server_reconnect_failed`
 
+Auth status payload must also include:
+
+- `auth_method`: `signup` | `login` | `google` | `github` | `unknown`
+- `is_authenticated`: `true` | `false`
+
 # Error Policy
 
 - `401/403`: re-auth and replace local credential
