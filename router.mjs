@@ -2,7 +2,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { spawnSync } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 
 const DEFAULT_API_URL = 'https://clikdeploy.com';
 
@@ -105,18 +105,50 @@ function tryRun(cmd, args) {
   }
 }
 
+function resolveSelfHostBinaryPath() {
+  try {
+    const out = spawnSync('bash', ['-lc', 'command -v clikdeploy-self-host || true'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const bin = String(out.stdout || '').trim();
+    return bin || '';
+  } catch {
+    return '';
+  }
+}
+
+function startSelfHostRuntimeFallback() {
+  const bin = resolveSelfHostBinaryPath();
+  if (!bin) return false;
+  try {
+    const child = spawn(bin, [], {
+      detached: true,
+      stdio: 'ignore',
+    });
+    child.unref();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function restartSelfHostRuntime() {
   if (process.platform === 'linux') {
     const ok = tryRun('systemctl', ['--user', 'restart', 'clikdeploy-self-host.service']);
     if (ok) return true;
-    return tryRun('systemctl', ['--user', 'start', 'clikdeploy-self-host.service']);
+    const started = tryRun('systemctl', ['--user', 'start', 'clikdeploy-self-host.service']);
+    if (started) return true;
+    return startSelfHostRuntimeFallback();
   }
   if (process.platform === 'darwin') {
     const uid = String(process.getuid ? process.getuid() : '').trim();
-    if (!uid) return false;
-    return tryRun('launchctl', ['kickstart', '-k', `gui/${uid}/com.clikdeploy.self-host`]);
+    if (!uid) return startSelfHostRuntimeFallback();
+    const kicked = tryRun('launchctl', ['kickstart', '-k', `gui/${uid}/com.clikdeploy.self-host`]);
+    if (kicked) return true;
+    return startSelfHostRuntimeFallback();
   }
-  return false;
+  return startSelfHostRuntimeFallback();
 }
 
 function stopSelfHostRuntime() {
