@@ -164,24 +164,58 @@ function normalizeImageName(name) {
   return cleaned.includes('/') ? cleaned : `library/${cleaned}`;
 }
 
+function normalizeRepoName(name) {
+  return normalizeImageName(name).replace(/^library\//, '');
+}
+
+function credibilityScore(image) {
+  const official = image?.official ? 1 : 0;
+  const trusted = image?.is_trusted ? 1 : 0;
+  const automated = image?.automated ? 1 : 0;
+  const stars = Number(image?.star_count || 0);
+  const pulls = Number(image?.pull_count || 0);
+
+  // Credibility dominates, then stars, then pulls.
+  // Weights are intentionally large to keep ordering deterministic.
+  return (
+    official * 1_000_000_000 +
+    trusted * 100_000_000 +
+    automated * 10_000_000 +
+    stars * 10_000 +
+    Math.floor(Math.log10(Math.max(1, pulls))) * 100
+  );
+}
+
 function selectDockerImage(queryName, images) {
   const target = normalizeImageName(queryName).toLowerCase();
+  const targetRepo = normalizeRepoName(queryName).toLowerCase();
   const rows = Array.isArray(images) ? images : [];
   if (rows.length === 0) return null;
 
-  const exact = rows.find((img) => normalizeImageName(img?.name).toLowerCase() === target);
-  if (exact) return normalizeImageName(exact.name);
+  const exactMatches = rows.filter(
+    (img) => normalizeImageName(img?.name).toLowerCase() === target
+  );
+  const shortExactMatches = rows.filter(
+    (img) => normalizeRepoName(img?.name).toLowerCase() === targetRepo
+  );
+  const relevantMatches = rows.filter((img) =>
+    normalizeRepoName(img?.name).toLowerCase().includes(targetRepo)
+  );
 
-  const exactShort = rows.find((img) => {
-    const normalized = normalizeImageName(img?.name).toLowerCase();
-    return normalized.replace(/^library\//, '') === target.replace(/^library\//, '');
-  });
-  if (exactShort) return normalizeImageName(exactShort.name);
+  const bucket =
+    exactMatches.length > 0
+      ? exactMatches
+      : shortExactMatches.length > 0
+        ? shortExactMatches
+        : relevantMatches.length > 0
+          ? relevantMatches
+          : rows;
 
-  const official = rows.find((img) => Boolean(img?.official));
-  if (official) return normalizeImageName(official.name);
+  const ranked = bucket
+    .slice()
+    .sort((a, b) => credibilityScore(b) - credibilityScore(a));
 
-  return normalizeImageName(rows[0]?.name || '');
+  return normalizeImageName(ranked[0]?.name || '');
 }
 
 function toAppNameFromImage(image) {
