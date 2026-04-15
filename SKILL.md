@@ -47,6 +47,8 @@ Deploy:
 
 # Commands
 
+The commands below contain ALL needed communication with secure execution.
+
 - `node router.mjs auth-status`
 - `node router.mjs auth-init google`
 - `node router.mjs auth-init github`
