@@ -29,21 +29,19 @@ The agent receives status JSON only.
 # Endpoints (router calls these)
 
 Auth:
-- `GET /api/auth/me`
-- `POST /api/auth/cli/device/init` (`provider`, `returnUrl: true`)
-- `POST /api/auth/cli/device/exchange` (`code`)
+- `GET /api/control-plane/auth/status`
+- `POST /api/control-plane/auth/device/init` (`provider`)
+- `POST /api/control-plane/auth/device/exchange` (`code`, `provider`, `autoConnect`)
 
 Self-host:
-- `POST /api/agents/provision`
+- `POST /api/control-plane/connect` (`name`)
 
 Deploy:
-- `GET /api/docker-hub/search?q=<name>`
-- `POST /api/apps`
-- `POST /api/apps/:id/deploy` (fallback when create response has no deployment id)
-- `DELETE /api/apps/:id`
-- `DELETE /api/servers/:id`
-- `GET /api/apps` (list app IDs before delete)
-- `GET /api/servers` (list server IDs before delete)
+- `POST /api/control-plane/deploy` (`name`)
+- `DELETE /api/control-plane/apps/:id`
+- `DELETE /api/control-plane/servers/:id`
+- `GET /api/control-plane/apps` (list app IDs before delete)
+- `GET /api/control-plane/servers` (list server IDs before delete)
 
 # Commands
 
