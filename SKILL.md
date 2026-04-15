@@ -29,7 +29,8 @@ The agent receives status JSON only.
 # Endpoints (router calls these)
 
 Auth:
-- `POST /api/auth/cli/device/init` (`provider`: `google|github`, `returnUrl: true`)
+- `GET /api/auth/me`
+- `POST /api/auth/cli/device/init` (`provider`, `returnUrl: true`)
 - `POST /api/auth/cli/device/exchange` (`code`)
 
 Self-host:
@@ -38,22 +39,24 @@ Self-host:
 Deploy:
 - `GET /api/docker-hub/search?q=<name>`
 - `POST /api/apps`
-- `POST /api/apps/:id/deploy`
+- `POST /api/apps/:id/deploy` (fallback when create response has no deployment id)
 - `DELETE /api/apps/:id`
 - `DELETE /api/servers/:id`
+- `GET /api/apps` (list app IDs before delete)
+- `GET /api/servers` (list server IDs before delete)
 
 # Commands
 
 - `node router.mjs auth-status`
-- `node router.mjs auth-init --provider google`
-- `node router.mjs auth-init --provider github`
-- `node router.mjs auth-exchange --code <ONE_TIME_CODE> --provider google|github`
-- `node router.mjs server-connect [--name "Home"]`
-- `node router.mjs server-reconnect [--name "Home"]`
-- `node router.mjs image-resolve --name wordpress`
-- `node router.mjs app-deploy --name wordpress [--server-id <id>]`
-- `node router.mjs app-delete --app-id <id>`
-- `node router.mjs server-delete --server-id <id>`
+- `node router.mjs auth-init google`
+- `node router.mjs auth-init github`
+- `node router.mjs auth-exchange <ONE_TIME_CODE> [google|github]` (auto-connects/updates self-host after successful auth)
+- `node router.mjs connect [Home]`
+- `node router.mjs deploy wordpress`
+- `node router.mjs list-apps`
+- `node router.mjs list-servers`
+- `node router.mjs delete-app <id>`
+- `node router.mjs delete-server <id>`
 
 # Status Output
 

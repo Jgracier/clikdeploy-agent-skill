@@ -155,6 +155,38 @@ function printJson(obj) {
   process.stdout.write(`${JSON.stringify(obj)}\n`);
 }
 
+async function connectSelfHost(apiUrl, apiKey, name) {
+  try {
+    const data = await apiCall({
+      apiUrl,
+      method: 'POST',
+      endpoint: '/api/agents/provision',
+      apiKey,
+      body: {
+        ...(name ? { name: String(name).trim() } : {}),
+      },
+    });
+    const token = String(data?.token || '').trim();
+    const serverId = String(data?.serverId || '').trim();
+    const agentId = String(data?.agentId || '').trim();
+    if (token && serverId) {
+      saveSelfHostConfig({ apiUrl, agentId: agentId || serverId, serverId, token });
+    }
+    return {
+      status: 'server_connected',
+      server_connected: true,
+      server_id: serverId || null,
+      agent_id: agentId || null,
+    };
+  } catch (error) {
+    return {
+      status: 'server_reconnect_failed',
+      server_connected: false,
+      error: error?.message || 'Failed to connect self-host agent',
+    };
+  }
+}
+
 function normalizeImageName(name) {
   const cleaned = String(name || '')
     .trim()
@@ -174,9 +206,6 @@ function credibilityScore(image) {
   const automated = image?.automated ? 1 : 0;
   const stars = Number(image?.star_count || 0);
   const pulls = Number(image?.pull_count || 0);
-
-  // Credibility dominates, then stars, then pulls.
-  // Weights are intentionally large to keep ordering deterministic.
   return (
     official * 1_000_000_000 +
     trusted * 100_000_000 +
@@ -193,13 +222,13 @@ function selectDockerImage(queryName, images) {
   if (rows.length === 0) return null;
 
   const exactMatches = rows.filter(
-    (img) => normalizeImageName(img?.name).toLowerCase() === target
+    (img) => normalizeImageName(String(img?.name || '')).toLowerCase() === target
   );
   const shortExactMatches = rows.filter(
-    (img) => normalizeRepoName(img?.name).toLowerCase() === targetRepo
+    (img) => normalizeRepoName(String(img?.name || '')).toLowerCase() === targetRepo
   );
   const relevantMatches = rows.filter((img) =>
-    normalizeRepoName(img?.name).toLowerCase().includes(targetRepo)
+    normalizeRepoName(String(img?.name || '')).toLowerCase().includes(targetRepo)
   );
 
   const bucket =
@@ -211,43 +240,32 @@ function selectDockerImage(queryName, images) {
           ? relevantMatches
           : rows;
 
-  const ranked = bucket
-    .slice()
-    .sort((a, b) => credibilityScore(b) - credibilityScore(a));
-
-  return normalizeImageName(ranked[0]?.name || '');
+  const ranked = bucket.slice().sort((a, b) => credibilityScore(b) - credibilityScore(a));
+  const selected = normalizeImageName(String(ranked[0]?.name || ''));
+  return selected || null;
 }
 
-function toAppNameFromImage(image) {
+function appNameFromImage(image) {
   const normalized = normalizeImageName(image);
   const repo = normalized.split('/').pop() || normalized;
-  return repo
-    .replace(/[^a-zA-Z0-9-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 100) || 'app';
+  return (
+    repo
+      .replace(/[^a-zA-Z0-9-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 100) || 'app'
+  );
 }
 
-async function resolveServerId(apiUrl, apiKey) {
-  const serversData = await apiCall({
-    apiUrl,
-    method: 'GET',
-    endpoint: '/api/servers',
-    apiKey,
-  });
-  const servers = Array.isArray(serversData) ? serversData : [];
-
-  const connectedHome = servers.find((s) =>
-    (s?.cloudProvider === 'HOME' || s?.connectionType === 'AGENT') && s?.status === 'CONNECTED'
+function selectServerForSkill(servers) {
+  const rows = Array.isArray(servers) ? servers : [];
+  if (rows.length === 0) return null;
+  const connectedHome = rows.find(
+    (s) => (s?.cloudProvider === 'HOME' || s?.connectionType === 'AGENT') && s?.status === 'CONNECTED'
   );
-  if (connectedHome?.id) return String(connectedHome.id);
-
-  const anyConnected = servers.find((s) => s?.status === 'CONNECTED');
-  if (anyConnected?.id) return String(anyConnected.id);
-
-  const anyHome = servers.find((s) => s?.cloudProvider === 'HOME' || s?.connectionType === 'AGENT');
-  if (anyHome?.id) return String(anyHome.id);
-
-  return '';
+  if (connectedHome) return connectedHome;
+  const connectedAny = rows.find((s) => s?.status === 'CONNECTED');
+  if (connectedAny) return connectedAny;
+  return rows[0];
 }
 
 async function cmdAuthStatus() {
@@ -293,9 +311,9 @@ async function cmdAuthStatus() {
 }
 
 async function cmdAuthInit(args) {
-  const provider = String(args.provider || '').trim().toLowerCase();
+  const provider = String(args.provider || args._[1] || '').trim().toLowerCase();
   if (provider !== 'google' && provider !== 'github') {
-    printJson({ status: 'auth_failed', error: 'provider must be google or github' });
+    printJson({ status: 'auth_failed', error: 'usage: auth-init google|github' });
     process.exitCode = 1;
     return;
   }
@@ -312,25 +330,29 @@ async function cmdAuthInit(args) {
 
   printJson({
     status: 'auth_required',
-    provider,
-    auth_url: data?.authUrl || '',
+    auth_method: provider,
+    is_authenticated: false,
+    auth_url: data?.authUrl || data?.auth_url || '',
   });
 }
 
 async function cmdAuthExchange(args) {
-  const code = String(args.code || '').trim().toUpperCase();
+  const code = String(args.code || args._[1] || '').trim().toUpperCase();
   if (!/^[A-F0-9]{10}$/.test(code)) {
-    printJson({ status: 'auth_failed', error: 'code must be 10 hex characters' });
+    printJson({ status: 'auth_failed', error: 'usage: auth-exchange <10-char-code> [google|github]' });
     process.exitCode = 1;
     return;
   }
 
   const apiUrl = normalizeApiUrl(args['api-url'] || DEFAULT_API_URL);
+  const provider = String(args.provider || args._[2] || 'unknown').trim().toLowerCase();
   const data = await apiCall({
     apiUrl,
     method: 'POST',
     endpoint: '/api/auth/cli/device/exchange',
-    body: { code },
+    body: {
+      code,
+    },
   });
 
   const apiKey = String(data?.apiKey || '').trim();
@@ -340,17 +362,22 @@ async function cmdAuthExchange(args) {
     return;
   }
 
-  const authMethod = String(args.provider || 'unknown').trim().toLowerCase();
   saveAuth({
     apiUrl,
     apiKey,
-    authMethod: authMethod === 'google' || authMethod === 'github' ? authMethod : 'unknown',
+    authMethod: provider === 'google' || provider === 'github' ? provider : 'unknown',
   });
 
+  const connectResult = await connectSelfHost(apiUrl, apiKey, args.name || args._[3]);
   printJson({
     status: 'auth_valid',
-    auth_method: authMethod === 'google' || authMethod === 'github' ? authMethod : 'unknown',
+    auth_method: provider === 'google' || provider === 'github' ? provider : 'unknown',
     is_authenticated: true,
+    server_status: connectResult.status,
+    server_connected: connectResult.server_connected,
+    server_id: connectResult.server_id || null,
+    agent_id: connectResult.agent_id || null,
+    ...(connectResult.error ? { server_error: connectResult.error } : {}),
   });
 }
 
@@ -363,76 +390,13 @@ async function cmdServerConnect(args) {
   }
 
   const apiUrl = normalizeApiUrl(auth.apiUrl || args['api-url'] || DEFAULT_API_URL);
-  try {
-    const data = await apiCall({
-      apiUrl,
-      method: 'POST',
-      endpoint: '/api/agents/provision',
-      apiKey: auth.apiKey,
-      body: {
-        name: String(args.name || `${os.hostname()} (Home)`),
-        platform: os.platform(),
-        arch: os.arch(),
-        hostname: os.hostname(),
-      },
-    });
-
-    const token = String(data?.token || '').trim();
-    const serverId = String(data?.serverId || '').trim();
-    const agentId = String(data?.agentId || '').trim();
-    if (token && serverId) {
-      saveSelfHostConfig({ apiUrl, agentId: agentId || serverId, serverId, token });
-    }
-
-    printJson({
-      status: 'server_connected',
-      server_connected: true,
-      server_id: serverId || null,
-      agent_id: agentId || null,
-    });
-  } catch (error) {
-    if (Number(error?.status || 0) === 409) {
-      printJson({
-        status: 'server_connected',
-        server_connected: true,
-      });
-      return;
-    }
-    printJson({
-      status: 'server_reconnect_failed',
-      server_connected: false,
-      error: error.message,
-    });
-    process.exitCode = 1;
-  }
-}
-
-async function cmdImageResolve(args) {
-  const name = String(args.name || '').trim();
-  if (!name) {
-    printJson({ status: 'app_deploy_failed', error: 'name is required' });
-    process.exitCode = 1;
-    return;
-  }
-
-  const apiUrl = normalizeApiUrl(args['api-url'] || loadAuth()?.apiUrl || DEFAULT_API_URL);
-  const data = await apiCall({
-    apiUrl,
-    method: 'GET',
-    endpoint: '/api/docker-hub/search',
-    query: { q: name, limit: 25 },
-  });
-
-  const resolved = selectDockerImage(name, data?.images || []);
-  if (!resolved) {
-    printJson({ status: 'app_deploy_failed', error: 'image not found' });
-    process.exitCode = 1;
-    return;
-  }
-
+  const result = await connectSelfHost(apiUrl, auth.apiKey, args.name || args._[1]);
   printJson({
-    status: 'image_resolved',
-    image: resolved,
+    status: result.status,
+    server_connected: result.server_connected,
+    server_id: result.server_id || null,
+    agent_id: result.agent_id || null,
+    ...(result.error ? { error: result.error } : {}),
   });
 }
 
@@ -444,7 +408,7 @@ async function cmdAppDeploy(args) {
     return;
   }
 
-  const inputName = String(args.name || args.image || '').trim();
+  const inputName = String(args.name || args.image || args._[1] || '').trim();
   if (!inputName) {
     printJson({ status: 'app_deploy_failed', error: 'name (image query) is required' });
     process.exitCode = 1;
@@ -452,29 +416,31 @@ async function cmdAppDeploy(args) {
   }
 
   const apiUrl = normalizeApiUrl(auth.apiUrl || DEFAULT_API_URL);
-
-  const search = await apiCall({
+  const searchData = await apiCall({
     apiUrl,
     method: 'GET',
     endpoint: '/api/docker-hub/search',
     query: { q: inputName, limit: 25 },
   });
-
-  const resolvedImage = selectDockerImage(inputName, search?.images || []);
+  const resolvedImage = selectDockerImage(inputName, searchData?.images || []);
   if (!resolvedImage) {
     printJson({ status: 'app_deploy_failed', error: 'unable to resolve image from Docker Hub' });
     process.exitCode = 1;
     return;
   }
 
-  const serverId = String(args['server-id'] || '').trim() || (await resolveServerId(apiUrl, auth.apiKey));
-  if (!serverId) {
+  const servers = await apiCall({
+    apiUrl,
+    method: 'GET',
+    endpoint: '/api/servers',
+    apiKey: auth.apiKey,
+  });
+  const selectedServer = selectServerForSkill(servers);
+  if (!selectedServer?.id) {
     printJson({ status: 'app_deploy_failed', error: 'no server available' });
     process.exitCode = 1;
     return;
   }
-
-  const appName = String(args['app-name'] || '').trim() || toAppNameFromImage(resolvedImage);
 
   const created = await apiCall({
     apiUrl,
@@ -482,33 +448,31 @@ async function cmdAppDeploy(args) {
     endpoint: '/api/apps',
     apiKey: auth.apiKey,
     body: {
-      name: appName,
-      serverId,
+      name: appNameFromImage(resolvedImage),
+      serverId: selectedServer.id,
       dockerImage: resolvedImage,
     },
   });
 
-  const appId = String(created?.id || '').trim();
-  if (!appId) {
-    printJson({ status: 'app_deploy_failed', error: 'app create did not return id' });
-    process.exitCode = 1;
-    return;
+  const appId = String(created?.id || created?.app?.id || '').trim();
+  let deploymentId = String(created?.deployment?.id || '').trim();
+  if (appId && !deploymentId) {
+    const deployData = await apiCall({
+      apiUrl,
+      method: 'POST',
+      endpoint: `/api/apps/${encodeURIComponent(appId)}/deploy`,
+      apiKey: auth.apiKey,
+      body: {},
+    });
+    deploymentId = String(deployData?.id || '').trim();
   }
-
-  const deployData = await apiCall({
-    apiUrl,
-    method: 'POST',
-    endpoint: `/api/apps/${encodeURIComponent(appId)}/deploy`,
-    apiKey: auth.apiKey,
-    body: { dockerImage: resolvedImage },
-  });
 
   printJson({
     status: 'app_deploy_started',
-    app_id: appId,
-    deployment_id: deployData?.id || null,
+    app_id: appId || null,
+    deployment_id: deploymentId || null,
     image: resolvedImage,
-    server_id: serverId,
+    server_id: String(selectedServer.id || ''),
   });
 }
 
@@ -520,9 +484,9 @@ async function cmdAppDelete(args) {
     return;
   }
 
-  const appId = String(args['app-id'] || '').trim();
+  const appId = String(args['app-id'] || args._[1] || '').trim();
   if (!appId) {
-    printJson({ status: 'app_deploy_failed', error: 'app-id is required' });
+    printJson({ status: 'app_deploy_failed', error: 'usage: delete-app <app-id>' });
     process.exitCode = 1;
     return;
   }
@@ -537,6 +501,38 @@ async function cmdAppDelete(args) {
   printJson({ status: 'app_deleted', app_id: appId });
 }
 
+async function cmdListApps() {
+  const auth = loadAuth();
+  if (!auth?.apiKey) {
+    printJson({ status: 'auth_required', is_authenticated: false });
+    process.exitCode = 1;
+    return;
+  }
+
+  const apps = await apiCall({
+    apiUrl: auth.apiUrl,
+    method: 'GET',
+    endpoint: '/api/apps',
+    apiKey: auth.apiKey,
+  });
+
+  const rows = Array.isArray(apps)
+    ? apps.map((app) => ({
+        id: String(app?.id || ''),
+        name: String(app?.name || ''),
+        status: String(app?.status || ''),
+        server_id: String(app?.serverId || ''),
+        server_name: String(app?.server?.name || ''),
+      }))
+    : [];
+
+  printJson({
+    status: 'apps_list',
+    count: rows.length,
+    apps: rows,
+  });
+}
+
 async function cmdServerDelete(args) {
   const auth = loadAuth();
   if (!auth?.apiKey) {
@@ -545,9 +541,9 @@ async function cmdServerDelete(args) {
     return;
   }
 
-  const serverId = String(args['server-id'] || '').trim();
+  const serverId = String(args['server-id'] || args._[1] || '').trim();
   if (!serverId) {
-    printJson({ status: 'server_reconnect_failed', error: 'server-id is required' });
+    printJson({ status: 'server_reconnect_failed', error: 'usage: delete-server <server-id>' });
     process.exitCode = 1;
     return;
   }
@@ -562,18 +558,50 @@ async function cmdServerDelete(args) {
   printJson({ status: 'server_deleted', server_id: serverId });
 }
 
+async function cmdListServers() {
+  const auth = loadAuth();
+  if (!auth?.apiKey) {
+    printJson({ status: 'auth_required', is_authenticated: false });
+    process.exitCode = 1;
+    return;
+  }
+
+  const servers = await apiCall({
+    apiUrl: auth.apiUrl,
+    method: 'GET',
+    endpoint: '/api/servers',
+    apiKey: auth.apiKey,
+  });
+
+  const rows = Array.isArray(servers)
+    ? servers.map((server) => ({
+        id: String(server?.id || ''),
+        name: String(server?.name || ''),
+        status: String(server?.status || ''),
+        cloud_provider: String(server?.cloudProvider || ''),
+        connection_type: String(server?.connectionType || ''),
+      }))
+    : [];
+
+  printJson({
+    status: 'servers_list',
+    count: rows.length,
+    servers: rows,
+  });
+}
+
 function printHelp() {
   printJson({
     commands: [
       'auth-status',
-      'auth-init --provider google|github [--api-url URL]',
-      'auth-exchange --code CODE [--provider google|github] [--api-url URL]',
-      'server-connect [--name NAME]',
-      'server-reconnect [--name NAME]',
-      'image-resolve --name IMAGE_QUERY [--api-url URL]',
-      'app-deploy --name IMAGE_QUERY [--server-id ID] [--app-name NAME]',
-      'app-delete --app-id ID',
-      'server-delete --server-id ID',
+      'auth-init google|github',
+      'auth-exchange CODE [google|github]',
+      'connect [name]',
+      'deploy IMAGE_NAME',
+      'list-apps',
+      'list-servers',
+      'delete-app APP_ID',
+      'delete-server SERVER_ID',
     ],
   });
 }
@@ -593,20 +621,22 @@ async function main() {
       case 'auth-exchange':
         await cmdAuthExchange(args);
         break;
-      case 'server-connect':
-      case 'server-reconnect':
+      case 'connect':
         await cmdServerConnect(args);
         break;
-      case 'image-resolve':
-        await cmdImageResolve(args);
-        break;
-      case 'app-deploy':
+      case 'deploy':
         await cmdAppDeploy(args);
         break;
-      case 'app-delete':
+      case 'list-apps':
+        await cmdListApps();
+        break;
+      case 'list-servers':
+        await cmdListServers();
+        break;
+      case 'delete-app':
         await cmdAppDelete(args);
         break;
-      case 'server-delete':
+      case 'delete-server':
         await cmdServerDelete(args);
         break;
       case 'help':
