@@ -36,7 +36,7 @@ metadata:
 # Contract
 
 1. API-only skill: call platform HTTP endpoints directly; do not invoke CLI commands.
-2. Authenticate with platform auth endpoints only, persist local credential, and reuse it for later calls.
+2. Authenticate with device OAuth only (`/api/auth/cli/device/*`), persist local credential, and reuse it for later calls.
 3. Connect or reconnect self-host with `POST /api/agents/provision` before deploy.
 4. After auth success, immediately connect or reconnect self-host.
 5. Resolve app image from Docker Hub search on every deploy, then deploy using the resolved image name only.
@@ -48,14 +48,14 @@ metadata:
 - Default `api_url`: `https://clikdeploy.com`
 - Transport: JSON requests/responses
 - Auth header: bearer token from local store when available
-- Auth methods allowed: `signup`, `login`, `device_flow` (OAuth via `google` or `github`)
+- Auth method allowed: `device_flow` only (OAuth via `google` or `github`)
 - Deploy input: image name only, resolved from `/api/docker-hub/search` every time
 - Status reporting is mandatory in chat for auth and server connection
 - Never print raw secrets in chat
 
 # Local Auth
 
-Store after successful platform auth (`signup`, `login`, or `device/exchange`).
+Store after successful platform auth (`device/exchange`).
 
 - Linux/macOS: `${XDG_CONFIG_HOME:-~/.config}/clikdeploy/auth.json`
 - Windows: `${APPDATA}/ClikDeploy/auth.json`
@@ -77,10 +77,8 @@ Lookup precedence:
 # Endpoints
 
 Auth:
-- `/api/auth/cli/device/init`: `provider` (`google|github`), `returnUrl` (set `true` so response may include `consentUrl` in addition to `authUrl`)
+- `/api/auth/cli/device/init`: `provider` (`google|github`), `returnUrl` (set `true`), then open `authUrl` as the canonical browser URL
 - `/api/auth/cli/device/exchange`: `code`
-- `/api/auth/cli/signup`: `email`, `password`, optional `name`
-- `/api/auth/cli/login`: `email`, `password`
 
 Self-host:
 - `/api/agents/provision`: connect or reconnect self-host; optional `name` (defaults server-side), `platform`, `arch`, `hostname`
@@ -107,18 +105,11 @@ Auth endpoints:
 - `POST /api/auth/cli/device/init`
   - requires `provider` = `google|github`
   - with `returnUrl=true`, returns `flowId`, `authUrl`, `consentUrl`, `expiresInSec`
+  - use `authUrl` as the browser entrypoint for consent flow
   - invalid provider -> `400` with provider validation error
 - `POST /api/auth/cli/device/exchange`
   - requires `code`
   - missing or invalid code format -> `400`
-- `POST /api/auth/cli/signup`
-  - requires `email`, `password` (optional `name`)
-  - validation errors -> `400`
-  - may return `429` with `retry-after` under rate limit
-- `POST /api/auth/cli/login`
-  - requires valid email format and password
-  - invalid email format -> `400`
-  - bad credentials -> `401` (`AUTH_REQUIRED`)
 
 Search endpoint:
 - `GET /api/docker-hub/search?q=<term>`
@@ -137,10 +128,11 @@ Protected endpoints (bearer token required):
 # Flow
 
 1. Load local auth.
-2. If missing/invalid, authenticate with one of exactly three platform methods:
-- `signup` via `/api/auth/cli/signup`
-- `login` via `/api/auth/cli/login`
-- `device_flow` via `/api/auth/cli/device/init` + `/api/auth/cli/device/exchange`
+2. If missing/invalid, authenticate with `device_flow` only:
+- call `/api/auth/cli/device/init` with `provider` (`google` or `github`) and `returnUrl=true`
+- instruct user to open returned `authUrl` and complete consent
+- user pastes one-time code from callback page
+- call `/api/auth/cli/device/exchange` with that code
 3. Persist returned credential locally (`auth.json`, and `api-key` compatibility file when available).
 4. Connect or reconnect self-host with `POST /api/agents/provision`.
 5. Always resolve app name through `/api/docker-hub/search`, then deploy with the resolved image name.
@@ -171,7 +163,7 @@ Use these exact status values when reporting progress:
 
 Auth status payload must also include:
 
-- `auth_method`: `signup` | `login` | `google` | `github` | `unknown`
+- `auth_method`: `google` | `github` | `unknown`
 - `is_authenticated`: `true` | `false`
 
 # Error Policy
