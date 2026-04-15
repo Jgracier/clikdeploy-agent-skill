@@ -300,7 +300,7 @@ async function connectSelfHost(apiUrl, apiKey, name) {
       apiKey,
       body: {
         waitForHealthy: false,
-        ...(name ? { name: String(name).trim() } : {}),
+        name: String(name || 'Self Host').trim() || 'Self Host',
       },
     });
     const token = String(data?.agentToken || '').trim();
@@ -452,7 +452,7 @@ async function cmdAuthExchange(args) {
       code,
       autoConnect: true,
       waitForHealthy: false,
-      ...(args.name || args._[3] ? { name: String(args.name || args._[3]).trim() } : {}),
+      name: String(args.name || 'Self Host').trim() || 'Self Host',
     },
   });
 
@@ -522,7 +522,7 @@ async function cmdServerConnect(args) {
   }
 
   const apiUrl = normalizeApiUrl(auth.apiUrl || args['api-url'] || DEFAULT_API_URL);
-  const result = await connectSelfHost(apiUrl, auth.apiKey, args.name || args._[1]);
+  const result = await connectSelfHost(apiUrl, auth.apiKey, args.name || 'Self Host');
   printJson({
     status: result.status,
     server_connected: result.server_connected,
@@ -833,37 +833,12 @@ async function cmdListServers() {
     return;
   }
 
-  let servers;
-  try {
-    servers = await apiCall({
-      apiUrl: auth.apiUrl,
-      method: 'GET',
-      endpoint: '/api/gate/servers',
-      apiKey: auth.apiKey,
-    });
-  } catch {
-    const direct = await apiCall({
-      apiUrl: auth.apiUrl,
-      method: 'GET',
-      endpoint: '/api/servers',
-      apiKey: auth.apiKey,
-      query: { page: 1, pageSize: 100 },
-    });
-    const rows = Array.isArray(direct) ? direct : Array.isArray(direct?.data) ? direct.data : [];
-    servers = {
-      status: 'servers_list',
-      count: rows.length,
-      servers: rows.map((server) => ({
-        id: String(server?.id || ''),
-        name: String(server?.name || ''),
-        status: String(server?.status || ''),
-        cloudProvider: String(server?.cloudProvider || ''),
-        connectionType: String(server?.connectionType || ''),
-        ipAddress: String(server?.ipAddress || ''),
-        healthError: String(server?.healthError || ''),
-      })),
-    };
-  }
+  const servers = await apiCall({
+    apiUrl: auth.apiUrl,
+    method: 'GET',
+    endpoint: '/api/gate/servers',
+    apiKey: auth.apiKey,
+  });
 
   printJson({
     status: servers?.status || 'servers_list',
@@ -879,7 +854,7 @@ function printHelp() {
       'auth-init google|github',
       'auth-exchange CODE',
       'server-status',
-      'connect [name]',
+      'connect [--name \"Self Host\"]',
       'deploy IMAGE_NAME',
       'notifications',
       'notifications-clear',

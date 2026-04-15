@@ -32,7 +32,7 @@ The commands below contain ALL needed communication with secure execution.
 - `node router.mjs server-status`
   - Non-mutating status check.
   - Use this to verify whether Self Host is connected.
-- `node router.mjs connect [SelfHost]`
+- `node router.mjs connect`
   - On success: `All set, what apps would you like to deploy?`
   - On failure: `Reconnect failed, want me to try again?`
 - `node router.mjs deploy <app_name>`
@@ -53,7 +53,7 @@ The commands below contain ALL needed communication with secure execution.
 - `POST /api/gate/connect` supports: `name`, `waitForHealthy`, `waitTimeoutMs`
 - Defaults are platform-owned:
   - `autoConnect: true`
-  - `waitForHealthy: true`
+  - `waitForHealthy: false` for skill/CLI; readiness is validated client-side via installer + status checks
   - self host name defaults to `Self Host` when name is omitted
 
 # Status Output
