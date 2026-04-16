@@ -38,25 +38,10 @@ The `clikdeploy` CLI contains ALL needed communication with secure execution.
 - `clikdeploy marketplace deploy <app_name>`
   - On success: `Deploy started for <app_name>. I will notify you when it completes.`
 
-- `clikdeploy notifications list --json`
-  - Check for deployment completion or error messages (latest 20).
-
-- `clikdeploy notifications clear --json`
-  - Cleanup for notification history.
-
 - `clikdeploy apps list`
 - `clikdeploy servers list`
 - `clikdeploy apps delete <id>`
 - `clikdeploy servers delete <id>`
-
-# API Gate Contract (standardized)
-
-- `POST /api/gate/auth/device/exchange` supports: `code`, `autoConnect`, `name`, `waitForHealthy`, `waitTimeoutMs`
-- `POST /api/gate/connect` supports: `name`, `waitForHealthy`, `waitTimeoutMs`
-- Defaults are platform-owned:
-  - `autoConnect: true`
-  - `waitForHealthy: false` for skill/CLI; readiness is validated client-side via installer + status checks
-  - self host name defaults to `Self Host` when name is omitted
 
 # Status Output
 
@@ -69,12 +54,12 @@ Use `agent_state` for behavior:
 
 Status check rule:
 - Do not call `connect` to check status.
-- Call `server-status` for read-only verification.
+- Call `clikdeploy servers status` for read-only verification.
 
 Deploy completion behavior:
 - `deploy` is non-blocking and returns immediately after deployment is accepted.
-- Router starts an internal event-driven watcher using `/api/deployments/:id/wait?wait=1`.
-- On completion, router automatically sends a deterministic completion message through the local messaging/notification method:
+- The CLI starts an internal event-driven watcher using `/api/deployments/:id/wait?wait=1`.
+- On completion, the CLI automatically sends a deterministic completion message through the local messaging/notification method:
   - Example success: `n8n deployed successfully, here is the url to begin using it: <url>`
 - Agent polling is not required for user notification.
 
