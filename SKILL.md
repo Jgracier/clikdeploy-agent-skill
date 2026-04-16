@@ -14,7 +14,6 @@ platforms:
 
 The `clikdeploy` CLI contains ALL needed communication with secure execution.
 
-<<<<<<< HEAD
 - `clikdeploy whoami --json`
   - If authenticated: `is_authenticated: true`
   - If not authenticated: `is_authenticated: false`
@@ -49,40 +48,6 @@ The `clikdeploy` CLI contains ALL needed communication with secure execution.
 - `clikdeploy servers list`
 - `clikdeploy apps delete <id>`
 - `clikdeploy servers delete <id>`
-=======
-- `ClikDeploy auth-status`
-  - If authenticated: `Authentication is valid.`
-  - If not authenticated: `Authentication required. Run auth-init first.`
-
-- `ClikDeploy auth-init google`
-  - Example wordage: `Open this login URL to continue: <auth_url>. After consent, paste the one-time code here.`
-
-- `ClikDeploy auth-init github`
-  - Example wordage: `Open this login URL to continue: <auth_url>. After consent, paste the one-time code here.`
-
-- `ClikDeploy auth-exchange <ONE_TIME_CODE>` # User submits 1 time generated code for secure api key exchange
-  - On success with server connected: `All set, what apps would you like to deploy?`
-  - On error: diagnose and try again only 2 times before informing user the problem.
-
-(auto-connects/updates connection after auth)
-- `ClikDeploy server-status`
-  - Non-mutating status check.
-  - Use this to verify whether Self Host is connected.
-- `ClikDeploy connect`
-  - On success: `All set, what apps would you like to deploy?`
-  - On failure: `Reconnect failed, want me to try again?`
-- `ClikDeploy deploy <app_name>`
-  - On success: `Deploy started for <app_name>. This may take a few minutes. I will notify you when it is completed.`
-  - On failure: `Deployment failed: <error>.`
-- `ClikDeploy notifications`
-  - Optional debug view of local notification records (latest 20).
-- `ClikDeploy notifications-clear`
-  - Optional cleanup for local notification records.
-- `ClikDeploy list-apps`
-- `ClikDeploy list-servers`
-- `ClikDeploy delete-app <id>`
-- `ClikDeploy delete-server <id>`
->>>>>>> d552c5311881c43e9451e50cf46f8b4558130716
 
 # API Gate Contract (standardized)
 
