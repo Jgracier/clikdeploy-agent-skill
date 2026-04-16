@@ -9,8 +9,7 @@ author: ClikDeploy
 
 ## Auth
 - `clikdeploy whoami` # Check current auth status
-- `clikdeploy login --google --return-url` # Login with Google and wait for 1 time code
-- `clikdeploy login --github --return-url` # Login with GitHub and wait for 1 time code
+- `clikdeploy login-url --google | --github` # Login with Google or GitHub and wait for 1 time code
 - `clikdeploy login --exchange <ONE_TIME_CODE>` # User will return a 1 time code to exchange for locally stored api key and self host connection.
 
 ## Structured Discovery
