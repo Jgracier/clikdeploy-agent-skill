@@ -1,80 +1,36 @@
 ---
 name: clikdeploy_deploy_skill
-description: Minimal API contract for one-time-code auth, self host connect, and app deploy.
-version: 0.5.0
+description: Simple contract for auth, connect, and deploy with ClikDeploy CLI.
+version: 0.6.0
 author: ClikDeploy
-license: MIT
-platforms:
-  - linux
-  - macos
-  - windows
 ---
 
-# Commands
+# Use These Commands
 
-The `clikdeploy` CLI contains ALL needed communication with secure execution.
+## Auth
+- `clikdeploy whoami` # Check current auth status
+- `clikdeploy login --google --return-url` # Login with Google and wait for 1 time code
+- `clikdeploy login --github --return-url` # Login with GitHub and wait for 1 time code
+- `clikdeploy login --exchange <ONE_TIME_CODE>` # User will return a 1 time code to exchange for locally stored api key and self host connection.
 
-- `clikdeploy whoami --json`
-  - If authenticated: `is_authenticated: true`
-  - If not authenticated: `is_authenticated: false`
+## Structured Discovery
+- `clikdeploy deploy` # no arg will return structured JSON of deployable apps from connected servers
+- `clikdeploy status` # no arg will return structured JSON of status of apps from connected servers
+- `clikdeploy list` # no arg will return structured JSON of connected servers and their apps
+- `clikdeploy connect` # no arg, will return structured JSON of available server connection options, this skill is for the self host option.
 
-- `clikdeploy login --google --return-url`
-  - Example wordage: `Open this login URL to continue: <authUrl>. After consent, paste the one-time code here.`
+## Deploy
+- `clikdeploy deploy <app-name>` # Name only will resolve with dockerhub and deploy automatically. App will deploy to a single connected server immediately or will return list of servers if more than 1 to clarify which server to deploy to.
 
-- `clikdeploy login --github --return-url`
-  - Example wordage: `Open this login URL to continue: <authUrl>. After consent, paste the one-time code here.`
 
-- `clikdeploy login --exchange <ONE_TIME_CODE>`
-  - trades code for `apiKey`, saves it globally, provisions the server, and installs the agent.
-  - On success: `All set, what apps would you like to deploy?`
-  - On error: diagnose and try again.
+## Operate
+- `clikdeploy status <app-or-server>`
+- `clikdeploy logs <app>`
+- `clikdeploy restart <app>`
+- `clikdeploy stop <app>`
+- `clikdeploy start <app>`
+- `clikdeploy delete <app-or-server>`
 
-- `clikdeploy servers list` (or `clikdeploy servers status`)
-  - Use this to verify whether Self Host is connected.
+# Rule
 
-- `clikdeploy servers connect self-host`
-  - Manual reconnect/re-provision for self-host agent.
-
-- `clikdeploy marketplace deploy <app_name>`
-  - On success: `Deploy started for <app_name>. I will notify you when it completes.`
-
-- `clikdeploy apps list`
-- `clikdeploy servers list`
-- `clikdeploy apps delete <id>`
-- `clikdeploy servers delete <id>`
-
-# Status Output
-
-Return structured status plus a user-facing `message`.
-On successful auth/connect callbacks, prioritize the `message` and do not restate IDs or raw statuses in chat.
-Only include specific technical details when auth or server connection failed.
-Use `agent_state` for behavior:
-- `ready`: proceed and ask what app to deploy
-- `needs_attention`: show the error and next step
-
-Status check rule:
-- Do not call `connect` to check status.
-- Call `clikdeploy servers status` for read-only verification.
-
-Deploy completion behavior:
-- `deploy` is non-blocking and returns immediately after deployment is accepted.
-- The CLI starts an internal event-driven watcher using `/api/deployments/:id/wait?wait=1`.
-- On completion, the CLI automatically sends a deterministic completion message through the local messaging/notification method:
-  - Example success: `n8n deployed successfully, here is the url to begin using it: <url>`
-- Agent polling is not required for user notification.
-
-Status values:
-- `auth_required` | `auth_valid` | `auth_failed`
-- `server_connected` | `server_reconnect_failed`
-- `app_deploy_started` | `app_deploy_failed`
-
-Auth payload fields:
-- `auth_method`: `google` | `github` | `unknown`
-- `is_authenticated`: `true` | `false`
-
-# Error Rules
-
-- `401/403`: re-auth via device flow
-- `409` on provision: treat active/already-exists as connected
-- `422`: report invalid input
-- `429/5xx`: retry with capped backoff
+If a command cannot run without clarification use the structured JSON clarification response and follow the provided format to ask the user for more information.
