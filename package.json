@@ -11,9 +11,7 @@
         "postinstall": "node setup.mjs",
         "test": "echo \"Error: no test specified\" && exit 1"
     },
-    "dependencies": {
-        "clikdeploy-cli": "workspace:*"
-    },
+    "dependencies": {},
     "author": "ClikDeploy",
     "license": "MIT"
 }
