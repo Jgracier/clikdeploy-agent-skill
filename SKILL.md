@@ -12,40 +12,42 @@ platforms:
 
 # Commands
 
-The commands below contain ALL needed communication with secure execution.
+The `clikdeploy` CLI contains ALL needed communication with secure execution.
 
-- `node router.mjs auth-status`
-  - If authenticated: `Authentication is valid.`
-  - If not authenticated: `Authentication required. Run auth-init first.`
+- `clikdeploy whoami --json`
+  - If authenticated: `is_authenticated: true`
+  - If not authenticated: `is_authenticated: false`
 
-- `node router.mjs auth-init google`
-  - Example wordage: `Open this login URL to continue: <auth_url>. After consent, paste the one-time code here.`
+- `clikdeploy login --google --return-url`
+  - Example wordage: `Open this login URL to continue: <authUrl>. After consent, paste the one-time code here.`
 
-- `node router.mjs auth-init github`
-  - Example wordage: `Open this login URL to continue: <auth_url>. After consent, paste the one-time code here.`
+- `clikdeploy login --github --return-url`
+  - Example wordage: `Open this login URL to continue: <authUrl>. After consent, paste the one-time code here.`
 
-- `node router.mjs auth-exchange <ONE_TIME_CODE>` # User submits 1 time generated code for secure api key exchange
-  - On success with server connected: `All set, what apps would you like to deploy?`
-  - On error: diagnose and try again only 2 times before informing user the problem.
-
-(auto-connects/updates connection after auth)
-- `node router.mjs server-status`
-  - Non-mutating status check.
-  - Use this to verify whether Self Host is connected.
-- `node router.mjs connect`
+- `clikdeploy login --exchange <ONE_TIME_CODE>`
+  - trades code for `apiKey`, saves it globally, provisions the server, and installs the agent.
   - On success: `All set, what apps would you like to deploy?`
-  - On failure: `Reconnect failed, want me to try again?`
-- `node router.mjs deploy <app_name>`
-  - On success: `Deploy started for <app_name>. This may take a few minutes. I will notify you when it is completed.`
-  - On failure: `Deployment failed: <error>.`
-- `node router.mjs notifications`
-  - Optional debug view of local notification records (latest 20).
-- `node router.mjs notifications-clear`
-  - Optional cleanup for local notification records.
-- `node router.mjs list-apps`
-- `node router.mjs list-servers`
-- `node router.mjs delete-app <id>`
-- `node router.mjs delete-server <id>`
+  - On error: diagnose and try again.
+
+- `clikdeploy servers list` (or `clikdeploy servers status`)
+  - Use this to verify whether Self Host is connected.
+
+- `clikdeploy servers connect self-host`
+  - Manual reconnect/re-provision for self-host agent.
+
+- `clikdeploy marketplace deploy <app_name>`
+  - On success: `Deploy started for <app_name>. I will notify you when it completes.`
+
+- `clikdeploy notifications list --json`
+  - Check for deployment completion or error messages (latest 20).
+
+- `clikdeploy notifications clear --json`
+  - Cleanup for notification history.
+
+- `clikdeploy apps list`
+- `clikdeploy servers list`
+- `clikdeploy apps delete <id>`
+- `clikdeploy servers delete <id>`
 
 # API Gate Contract (standardized)
 
