@@ -1,0 +1,9 @@
+{
+  "name": "clikdeploy",
+  "version": "0.5.0",
+  "description": "ClikDeploy CLI — self-host connect and app deploy",
+  "bin": {
+    "ClikDeploy": "router.mjs"
+  },
+  "license": "MIT"
+}

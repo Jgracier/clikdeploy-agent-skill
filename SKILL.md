@@ -14,38 +14,38 @@ platforms:
 
 The commands below contain ALL needed communication with secure execution.
 
-- `node router.mjs auth-status`
+- `ClikDeploy auth-status`
   - If authenticated: `Authentication is valid.`
   - If not authenticated: `Authentication required. Run auth-init first.`
 
-- `node router.mjs auth-init google`
+- `ClikDeploy auth-init google`
   - Example wordage: `Open this login URL to continue: <auth_url>. After consent, paste the one-time code here.`
 
-- `node router.mjs auth-init github`
+- `ClikDeploy auth-init github`
   - Example wordage: `Open this login URL to continue: <auth_url>. After consent, paste the one-time code here.`
 
-- `node router.mjs auth-exchange <ONE_TIME_CODE>` # User submits 1 time generated code for secure api key exchange
+- `ClikDeploy auth-exchange <ONE_TIME_CODE>` # User submits 1 time generated code for secure api key exchange
   - On success with server connected: `All set, what apps would you like to deploy?`
   - On error: diagnose and try again only 2 times before informing user the problem.
 
 (auto-connects/updates connection after auth)
-- `node router.mjs server-status`
+- `ClikDeploy server-status`
   - Non-mutating status check.
   - Use this to verify whether Self Host is connected.
-- `node router.mjs connect`
+- `ClikDeploy connect`
   - On success: `All set, what apps would you like to deploy?`
   - On failure: `Reconnect failed, want me to try again?`
-- `node router.mjs deploy <app_name>`
+- `ClikDeploy deploy <app_name>`
   - On success: `Deploy started for <app_name>. This may take a few minutes. I will notify you when it is completed.`
   - On failure: `Deployment failed: <error>.`
-- `node router.mjs notifications`
+- `ClikDeploy notifications`
   - Optional debug view of local notification records (latest 20).
-- `node router.mjs notifications-clear`
+- `ClikDeploy notifications-clear`
   - Optional cleanup for local notification records.
-- `node router.mjs list-apps`
-- `node router.mjs list-servers`
-- `node router.mjs delete-app <id>`
-- `node router.mjs delete-server <id>`
+- `ClikDeploy list-apps`
+- `ClikDeploy list-servers`
+- `ClikDeploy delete-app <id>`
+- `ClikDeploy delete-server <id>`
 
 # API Gate Contract (standardized)
 
