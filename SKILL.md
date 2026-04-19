@@ -33,3 +33,20 @@ author: ClikDeploy
 # Rule
 
 If a command cannot run without clarification use the structured JSON clarification response and follow the provided format to ask the user for more information.
+
+# Troubleshooting
+
+## API URL wrong (localhost instead of production)
+- Check: `clikdeploy config` — look for `api-url`
+- Fix: `clikdeploy config api-url https://clikdeploy.com`
+- The CLI binary defaults to `https://clikdeploy.com` (in `dist/constants.js`), but saved config overrides it
+- Root cause is often `.tmp-diag.ts` in the vendored CLI writing localhost into config
+
+## Updating the vendored CLI
+- CLI source is bundled as `vendor/cli/clikdeploy-cli-<version>.tgz`
+- To fix: `cd /tmp && tar xzf <path>/clikdeploy-cli-<ver>.tgz`, edit files in `package/`, repack with `tar czf`, replace the `.tgz`, commit and push
+- After repacking: `cd ~/.hermes/skills/clikdeploy-agent && npm link --force`
+
+## Reinstall after wipe/clone
+- `cd ~/.hermes/skills/clikdeploy-agent && npm link --force`
+- Verify: `which clikdeploy && clikdeploy --help`
