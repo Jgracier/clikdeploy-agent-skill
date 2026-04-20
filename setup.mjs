@@ -9,7 +9,7 @@ console.log('=== ClikDeploy Skill Setup (Cross-Platform) ===');
 const isWindows = os.platform() === 'win32';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const BUNDLED_CLI_TARBALL = path.join(__dirname, 'vendor', 'cli', 'clikdeploy-cli-1.0.4.tgz');
+const BUNDLED_CLI_TARBALL = path.join(__dirname, 'vendor', 'cli', 'clikdeploy-cli-1.0.5.tgz');
 
 function installBundledCli() {
     if (!fs.existsSync(BUNDLED_CLI_TARBALL)) {

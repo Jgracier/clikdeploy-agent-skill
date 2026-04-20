@@ -11,8 +11,8 @@ Create a new public repository, for example:
 Keep the bundled CLI tarball in this repo aligned with the latest CLI release:
 
 ```bash
-cp /home/justin-gracier/Desktop/clikdeploy/apps/cli/clikdeploy-cli-1.0.4.tgz vendor/cli/
-rm -f vendor/cli/clikdeploy-cli-1.0.3.tgz
+cp /home/justin-gracier/Desktop/clikdeploy/apps/cli/clikdeploy-cli-1.0.5.tgz vendor/cli/
+rm -f vendor/cli/clikdeploy-cli-1.0.4.tgz
 ```
 
 Also update these references when CLI version changes:
