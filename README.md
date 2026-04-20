@@ -6,7 +6,7 @@ This skill includes command guidance and a bundled ClikDeploy CLI tarball for lo
 
 - `SKILL.md`: canonical contract for endpoint usage and standardized arguments
 - `setup.mjs`: installs the bundled CLI tarball and then installs skill dependencies
-- `vendor/cli/clikdeploy-cli-1.0.3.tgz`: bundled CLI artifact used by setup
+- `vendor/cli/clikdeploy-cli-1.0.4.tgz`: bundled CLI artifact used by setup
 
 ## Publish
 

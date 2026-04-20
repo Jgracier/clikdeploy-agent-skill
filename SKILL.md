@@ -9,8 +9,10 @@ author: ClikDeploy
 
 ## Auth
 - `clikdeploy whoami` # Check current auth status
-- `clikdeploy login-url --google | --github` # Login with Google or GitHub and wait for 1 time code
-- `clikdeploy login --exchange <ONE_TIME_CODE>` # User will return a 1 time code to exchange for locally stored api key and self host connection.
+- `clikdeploy login-url --google | --github` # Login with Google or GitHub and wait for 1 time code. Must be returned to user as clickable link when available. Example of clickable link wording to markdown spec: [Login with Google | Github ](https://example.com/login?provider=google).
+- `clikdeploy login --exchange <ONE_TIME_CODE>` # User will return a 1 time code to exchange for locally stored api key and self host connection. 
+
+# All responses must be human-readable and clear.
 
 ## Structured Discovery
 - `clikdeploy deploy` # no arg will return structured JSON of deployable apps from connected servers
