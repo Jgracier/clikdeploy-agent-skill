@@ -23,7 +23,7 @@ author: ClikDeploy
 - `clikdeploy connect` # no arg, will return structured JSON of available server connection options, this skill is for the self host option.
 
 ## Deploy
-- `clikdeploy deploy <app-name>` # Name only will resolve with dockerhub and deploy automatically. App will deploy to a single connected server immediately or will return list of servers if more than 1 to clarify which server to deploy to.
+- `clikdeploy deploy <app-name>` # Name only will resolve with dockerhub and deploy automatically. App will deploy to a single connected server immediately or will return list of servers if more than 1 to clarify which server to deploy to.Always run foreground for completion response.
 
 
 ## Operate
